@@ -1,0 +1,166 @@
+.container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.tab-buttons {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 15px; /* Отступы между кнопками */
+}
+
+.form-field {
+  margin-bottom: 15px;
+}
+
+.form-label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.table-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.table-small-font {
+  font-size: 10px; /* Установите приятный размер шрифта для таблицы */
+}
+
+.ant-table-content {
+  font-size: 10px; /* Обновим размер шрифта */
+}
+
+/* Уменьшаем высоту строк в таблице */
+.ant-table-cell {
+  padding-top: 4px !important;  /* Отступ сверху */
+  padding-bottom: 4px !important; /* Отступ снизу */
+  padding-left: 8px !important;  /* Отступ слева */
+  padding-right: 8px !important; /* Отступ справа */
+  line-height: 1.2 !important; /* Уменьшаем межстрочное расстояние */
+}
+
+/* Устанавливаем кнопки в один ряд и предотвращаем перенос */
+.ant-table-cell .table-actions {
+  display: flex; /* Используем flexbox для размещения кнопок в ряд */
+  gap: 2px; /* Добавляем промежутки между кнопками */
+  flex-wrap: nowrap; /* Отключаем перенос элементов */
+  white-space: nowrap; /* Предотвращаем перенос текста */
+}
+
+.ant-table-tbody > tr > td {
+  padding-top: 4px !important;  /* Уменьшаем верхний отступ */
+  padding-bottom: 4px !important; /* Уменьшаем нижний отступ */
+  line-height: 1.2 !important; /* Можно немного уменьшить межстрочное расстояние */
+}
+
+/* Уменьшаем высоту ячеек заголовков */
+.ant-table-thead > tr > th {
+  padding: 8px !important; /* Уменьшаем отступы в заголовках */
+  line-height: 1.2 !important; /* Уменьшаем межстрочное расстояние */
+}
+
+/* Уменьшаем высоту полей при редактировании */
+.ant-input, .ant-select-selector, .ant-picker {
+  height: 25px; /* Размер полей такой же, как и без редактирования */
+  font-size: 10px; /* Размер текста такой же, как и без редактирования */
+}
+
+/* Уменьшаем высоту для select при редактировании */
+.ant-select-single .ant-select-selector {
+  height: 25px !important; /* Размер селекта как у обычного поля */
+  display: flex;
+  align-items: center; /* Центрируем содержимое */
+  font-size: 10px; /* Размер текста такой же, как и без редактирования */
+}
+
+/* Уменьшаем шрифт в селекторах (выпадающие списки) */
+.ant-select-dropdown .ant-select-item {
+  font-size: 10px; /* Уменьшаем шрифт для элементов в выпадающем списке */
+}
+
+/* Уменьшаем шрифт в датапикере (если используется) */
+.ant-picker-content {
+  font-size: 10px;
+}
+
+/* Уменьшаем размер шрифта в выпадающем фильтре таблицы */
+.ant-dropdown-menu {
+  font-size: 10px !important; /* Уменьшаем шрифт в выпадающем меню */
+}
+
+/* Уменьшаем размер checkbox (флажков) в фильтре таблицы */
+.ant-dropdown-menu-item {
+  padding: 4px 8px !important; /* Уменьшаем внутренний отступ для пунктов меню */
+  font-size: 10px !important; /* Уменьшаем шрифт в выпадающем меню */
+}
+
+/* Уменьшаем размер флажков в фильтре */
+.ant-checkbox {
+  transform: scale(0.8); /* Уменьшаем размер флажков */
+}
+
+/* Центрируем текст в полях */
+.ant-input, .ant-select-selector, .ant-picker {
+  line-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+/* Убираем внутренние отступы, если они больше, чем нужно */
+.ant-form-item {
+  margin-bottom: 0; /* Убираем лишние отступы */
+  font-size: 10px; /* Уменьшаем шрифт для формы */
+}
+
+/* Уменьшаем шрифт в popconfirm (подтверждение удаления или другой операции) */
+.ant-popover-inner-content {
+  font-size: 10px; /* Уменьшаем шрифт в popover */
+}
+
+.ant-btn {
+  font-size: 10px; /* Установим стандартный размер шрифта для кнопок */
+}
+
+.ant-btn-primary {
+  background-color: #4CAF50; /* Сделаем кнопки более современными */
+  border-color: #4CAF50;
+}
+
+.ant-btn-primary:hover {
+  background-color: #45a049; /* Добавим эффект при наведении */
+  border-color: #45a049;
+}
+
+.ant-modal-footer {
+  display: flex;
+  justify-content: flex-end; /* Выравнивание кнопок в модальных окнах */
+}
+
+.ant-form-item {
+  margin-bottom: 20px; /* Добавим отступы между полями формы */
+}
+
+button.custom-small-btn {/* Стили кнопок действий в таблице */
+  padding: 3.2px 6.4px; /* Уменьшаем отступы на 20% */
+  font-size: 9.6px; /* Уменьшаем размер текста на 20% */
+  height: 25.6px; /* Уменьшаем высоту на 20% */
+  line-height: 19.2px; /* Линия для центровки текста также уменьшена */
+  border-radius: 3.2px; /* Уменьшаем закругление углов */
+  margin: 6px 6px 0 0; /* Отступы сверху, справа, снизу (0), слева */
+}
+
+button.custom-small-btn .anticon {/* Стили кнопок действий в таблице */
+  font-size: 11.2px; /* Уменьшаем размер иконки на 20% */
+}
+
+button.custom-small-btn svg {/* Стили кнопок действий в таблице */
+  width: 11.2px; /* Уменьшаем размер svg-иконки на 20% */
+  height: 11.2px;
+}
+
+button.custom-small-btn:last-child {
+  margin-right: 0; /* Убираем отступ у последней кнопки */
+  margin-bottom: 6px; /* Добавляем нижний отступ, если кнопки одна под другой */
+}
