@@ -10,7 +10,8 @@ import Highlighter from 'react-highlight-words'; // Для выделения н
 import { Modal } from 'antd';
 import { DatePicker } from 'antd';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
+//const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
+const API_BASE_URL = localStorage.getItem('base_url');
 
 const { RangePicker } = DatePicker;  // Для фильтрации по диапазону дат
 const { Option } = Select;

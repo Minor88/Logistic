@@ -4,13 +4,25 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';  // Импорт i18next
 import './Login.css';
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
+//const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
+
+// Функция для определения правильного URL
+export const getBaseUrl = () => {
+  const isLocalNetwork = window.location.hostname.includes('192.168.1.11') || window.location.hostname === 'localhost';
+  return isLocalNetwork 
+    ? process.env.REACT_APP_API_BASE_URL_LOCAL 
+    : process.env.REACT_APP_API_BASE_URL_EXTERNAL;
+};
 
 function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();  // Подключение перевода
+
+  // Получаем правильный URL и сохраняем его в localStorage
+  const API_BASE_URL = getBaseUrl();
+  localStorage.setItem('base_url', API_BASE_URL);
 
   const handleLogin = async (e) => {
     e.preventDefault();
