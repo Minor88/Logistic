@@ -16,6 +16,10 @@ const API_BASE_URL = localStorage.getItem('base_url');
 const { RangePicker } = DatePicker;  // Для фильтрации по диапазону дат
 const { Option } = Select;
 
+const normalizeDecimalInput = (value) => {
+  return value.replace(',', '.');
+};
+
 function ManagerDashboard() {
   const [shipments, setShipments] = useState([]);
   const [clients, setClients] = useState([]);
@@ -49,6 +53,7 @@ function ManagerDashboard() {
   const statusOptionsRequests = [
     { value: 'new', label: 'Новая заявка' },
     { value: 'expected', label: 'Ожидается на складе' },
+    { value: 'on_warehouse', label: 'Формируется' },
     { value: 'in_progress', label: 'В работе' },
     { value: 'ready', label: 'Готово к выдаче' },
     { value: 'delivered', label: 'Выдано' }
@@ -334,7 +339,7 @@ function ManagerDashboard() {
         <label className="form-label">Фактический вес (кг):</label>
         <Input
           value={newRequest.actual_weight}
-          onChange={(e) => setNewRequest({ ...newRequest, actual_weight: e.target.value })}
+          onChange={(e) => setNewRequest({ ...newRequest, actual_weight: normalizeDecimalInput(e.target.value) })}
         />
         <small>Введите фактический вес.</small>
       </div>
@@ -343,7 +348,7 @@ function ManagerDashboard() {
         <label className="form-label">Фактический объем (м³):</label>
         <Input
           value={newRequest.actual_volume}
-          onChange={(e) => setNewRequest({ ...newRequest, actual_volume: e.target.value })}
+          onChange={(e) => setNewRequest({ ...newRequest, actual_volume: normalizeDecimalInput(e.target.value) })}
         />
         <small>Введите фактический объем.</small>
       </div>
@@ -366,11 +371,20 @@ function ManagerDashboard() {
           <small>Введите описание заявки (необязательно).</small>
         </div>
 
+        <div className="form-field">
+          <label className="form-label">Количество мест:</label>
+          <Input
+            value={newRequest.col_mest}
+            onChange={(e) => setNewRequest({ ...newRequest, col_mest: normalizeDecimalInput(e.target.value) })}
+          />
+          <small>Введите количество мест.</small>
+        </div>
+
       <div className="form-field">
         <label className="form-label">Вес (кг):</label>
         <Input
           value={newRequest.declared_weight}
-          onChange={(e) => setNewRequest({ ...newRequest, declared_weight: e.target.value })}
+          onChange={(e) => setNewRequest({ ...newRequest, declared_weight: normalizeDecimalInput(e.target.value) })}
         />
         <small>Введите заявленный вес.</small>
       </div>
@@ -379,7 +393,7 @@ function ManagerDashboard() {
         <label className="form-label">Объем (м³):</label>
         <Input
           value={newRequest.declared_volume}
-          onChange={(e) => setNewRequest({ ...newRequest, declared_volume: e.target.value })}
+          onChange={(e) => setNewRequest({ ...newRequest, declared_volume: normalizeDecimalInput(e.target.value) })}
         />
         <small>Введите заявленный объем.</small>
       </div>
@@ -1033,6 +1047,12 @@ const fileModal = (
       sorter: (a, b) => a.description.localeCompare(b.description), //Сортировакка
       ...getColumnSearchProps('description'), // Фильтрация и поиск по номеру 
     },
+    {
+      title: 'Кол-во мест',
+      dataIndex: 'col_mest',
+      key: 'col_mest',
+      editable: false
+    },
     { title: 'Вес (кг)', dataIndex: 'declared_weight', key: 'declared_weight', editable: false },
     { title: 'Объем (м³)', dataIndex: 'declared_volume', key: 'declared_volume', editable: false },
     { title: 'Фактический вес (кг)', dataIndex: 'actual_weight', key: 'actual_weight', editable: true },
@@ -1229,7 +1249,7 @@ const fileModal = (
             dataSource={requests}
             columns={mergedColumnsRequests}
             rowClassName="editable-row"
-            pagination={{ onChange: cancel }}
+            pagination={{ pageSize: 30, onChange: cancel }}
             onChange={handleTableChange}  // Добавляем обработчик для отслеживания изменений фильтров и сортировки
           />
           </Form>
