@@ -670,6 +670,7 @@ const fileModal = (
             >
               {decodeFileName(file.file)} {/* Для корректного отображения кириллических символов */}
             </Button>
+            {currentRecord.status === 'new' && (
             <Button
               icon={<DeleteOutlined />}
               danger
@@ -677,6 +678,7 @@ const fileModal = (
             >
               Удалить
             </Button>
+            )}
           </div>
         ))
       ) : (
@@ -766,20 +768,58 @@ const fileModal = (
   const isEditing = (record) => record.key === editingKey;
 
   // Начать редактирование
-  const edit = (record) => {
-    form.setFieldsValue({ ...record });
-    setEditingKey(record.key);
+  const edit = async (record) => {
+    const token = localStorage.getItem('token');
+    const currentAuthUserId = localStorage.getItem('user_id'); // Получаем ID авторизованного пользователя
+    const headers = { Authorization: `Token ${token}` };
+  
+    try {
+      // Выполняем запрос для получения профиля клиента
+      const profileResponse = await axios.get(`${API_BASE_URL}/logistic/api/userprofiles/`, { headers });
+      const userProfile = profileResponse.data.find(profile => profile.user === parseInt(currentAuthUserId));
+  
+      if (!userProfile) {
+        console.error("Профиль пользователя не найден");
+        message.error('Профиль пользователя не найден');
+        return;
+      }
+  
+      // Устанавливаем значения в форму для редактирования
+      form.setFieldsValue({
+        ...record,
+        client: userProfile.id,  // Автоматически заполняем поле "Клиент"
+      });
+  
+      setEditingKey(record.key);  // Устанавливаем запись в режим редактирования
+    } catch (error) {
+      console.error('Ошибка при получении профиля клиента:', error);
+      message.error('Ошибка при получении профиля клиента');
+    }
   };
 
   // Отмена редактирования
   const cancel = () => setEditingKey('');
 
   // Сохранение изменений
-  const save = async (key) => {
+  /*const save = async (key) => {
     try {
       const row = await form.validateFields();
       const token = localStorage.getItem('token');
+      const currentAuthUserId = localStorage.getItem('user_id'); // Получаем ID авторизованного пользователя
       const headers = { Authorization: `Token ${token}` };
+
+      // Получаем профиль клиента, как делалось при редактировании
+      const profileResponse = await axios.get(`${API_BASE_URL}/logistic/api/userprofiles/`, { headers });
+      const userProfile = profileResponse.data.find(profile => profile.user === parseInt(currentAuthUserId));
+
+      if (!userProfile) {
+        console.error("Профиль пользователя не найден");
+        message.error('Профиль пользователя не найден');
+        return;
+      }
+
+      // Добавляем поле client в данные, которые отправляем на сервер
+      const updatedRow = { ...row, client: userProfile.id };
 
       if (isViewing === 'shipments') {
         // Логика сохранения для отправлений
@@ -814,6 +854,66 @@ const fileModal = (
           console.log('Заявка успешно обновлена');
         } else {
           newData.push(row);
+          setRequests(newData);
+          setEditingKey('');
+        }
+      }
+    } catch (err) {
+      console.error('Ошибка при сохранении данных:', err);
+    }
+  };*/
+  const save = async (key) => {
+    try {
+      // Валидируем поля формы
+      const row = await form.validateFields();
+      const token = localStorage.getItem('token');
+      const currentAuthUserId = localStorage.getItem('user_id'); // Получаем ID авторизованного пользователя
+      const headers = { Authorization: `Token ${token}` };
+  
+      // Получаем профиль клиента, как делалось при редактировании
+      const profileResponse = await axios.get(`${API_BASE_URL}/logistic/api/userprofiles/`, { headers });
+      const userProfile = profileResponse.data.find(profile => profile.user === parseInt(currentAuthUserId));
+  
+      if (!userProfile) {
+        console.error("Профиль пользователя не найден");
+        message.error('Профиль пользователя не найден');
+        return;
+      }
+  
+      // Добавляем поле client в данные, которые отправляем на сервер
+      const updatedRow = { ...row, client: userProfile.id };
+  
+      if (isViewing === 'shipments') {
+        // Логика сохранения для отправлений
+        const newData = [...shipments];
+        const index = newData.findIndex((item) => key === item.key);
+  
+        if (index > -1) {
+          const item = newData[index];
+          newData.splice(index, 1, { ...item, ...updatedRow });
+          setShipments(newData);
+          setEditingKey('');
+          await axios.put(`${API_BASE_URL}/logistic/api/shipments/${item.id}/`, updatedRow, { headers });
+          console.log('Отправление успешно обновлено');
+        } else {
+          newData.push(updatedRow);
+          setShipments(newData);
+          setEditingKey('');
+        }
+      } else if (isViewing === 'requests') {
+        // Логика сохранения для заявок
+        const newData = [...requests];
+        const index = newData.findIndex((item) => key === item.key);
+  
+        if (index > -1) {
+          const item = newData[index];
+          newData.splice(index, 1, { ...item, ...updatedRow });
+          setRequests(newData);
+          setEditingKey('');
+          await axios.put(`${API_BASE_URL}/logistic/api/requests/${item.id}/`, updatedRow, { headers });
+          console.log('Заявка успешно обновлена');
+        } else {
+          newData.push(updatedRow);
           setRequests(newData);
           setEditingKey('');
         }
@@ -1172,6 +1272,7 @@ const fileModal = (
       title: 'Действия',
       render: (_, record) => {
         const editable = isEditing(record);
+        const isNewRequest = record.status === 'new';  // Проверка статуса заявки
         return editable ? (
           <span>
             <div className="table-actions">
@@ -1194,6 +1295,8 @@ const fileModal = (
         ) : (
           <span>
               <div className="table-actions">
+              {isNewRequest && (
+                <>
               <Button
                 icon={<EditOutlined/>}
                 onClick={() => edit(record)}
@@ -1210,6 +1313,8 @@ const fileModal = (
                   {/*Удалить*/}
                 </Button>
               </Popconfirm>
+              </>
+              )}
               </div>
           </span>
         );
