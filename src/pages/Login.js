@@ -11,7 +11,7 @@ export const getBaseUrl = () => {
   const isLocalNetwork = window.location.hostname.includes('192.168.1.11') || window.location.hostname === 'localhost';
   return isLocalNetwork 
     ? process.env.REACT_APP_API_BASE_URL_LOCAL 
-    : process.env.REACT_APP_API_BASE_URL_EXTERNAL.replace('hq-developer.com', '83.219.136.73');
+    : process.env.REACT_APP_API_BASE_URL_EXTERNAL;
 };
 
 function Login() {
