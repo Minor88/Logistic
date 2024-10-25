@@ -1039,11 +1039,11 @@ const fileModal = (
       ...getColumnDateFilterProps('created_at'),  // Добавляем фильтрацию по диапазону дат
     },
     { title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
-      sorter: (a, b) => a.number.localeCompare(b.number), //Сортировакка
+      //sorter: (a, b) => a.number.localeCompare(b.number), //Сортировакка
       ...getColumnSearchProps('number'), // Фильтрация и поиск по номеру
      },
     { title: 'Складской №', dataIndex: 'warehouse_number', key: 'warehouse_number', editable: true,
-      sorter: (a, b) => a.warehouse_number.localeCompare(b.warehouse_number), //Сортировакка
+      //sorter: (a, b) => a.warehouse_number.localeCompare(b.warehouse_number), //Сортировакка
       ...getColumnSearchProps('warehouse_number'), // Фильтрация и поиск по номеру 
     },
     { title: 'Описание', dataIndex: 'description', key: 'description', editable: true,
