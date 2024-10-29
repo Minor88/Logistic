@@ -72,6 +72,8 @@ const FileManagementModal = ({ visible, onClose, shipmentId, fetchShipmentFiles,
 
   // Загрузка новых файлов
   const handleFileUpload = async () => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
     const formData = new FormData();
     selectedFiles.forEach(file => formData.append('files', file));
   
@@ -92,6 +94,8 @@ const FileManagementModal = ({ visible, onClose, shipmentId, fetchShipmentFiles,
 
   // Создание новой папки
   const handleCreateFolder = async () => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
     try {
       await axios.post(`${API_BASE_URL}/logistic/api/shipments/${shipmentId}/create_folder/`, { folder_name: newFolderName }, { headers });
       message.success('Папка создана');
@@ -105,6 +109,8 @@ const FileManagementModal = ({ visible, onClose, shipmentId, fetchShipmentFiles,
 
   // Удаление файла или папки
 const handleDelete = async (key, isFolder) => {
+  const token = localStorage.getItem('token');
+  const headers = { Authorization: `Token ${token}` };
   const url = isFolder
     ? `${API_BASE_URL}/logistic/api/shipments/${shipmentId}/folders/${key}`
     : `${API_BASE_URL}/logistic/api/shipments/${shipmentId}/files/${key}`;
@@ -121,6 +127,8 @@ const handleDelete = async (key, isFolder) => {
 
   // Скачивание файла
   const handleDownload = (fileId) => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
     axios({
       url: `${API_BASE_URL}/logistic/api/shipments/${shipmentId}/download_file/${fileId}/`,
       method: 'GET',
