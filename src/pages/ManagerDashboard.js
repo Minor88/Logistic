@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Table, Input, Button, Select, Popconfirm, Form, Upload, message } from 'antd';
-import { UploadOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { UploadOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, CheckOutlined, CloseOutlined, MailOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';  // Импортируем библиотеку для работы с Excel
 import './ManagerDashboard.css';  // Подключаем стили
 import { SearchOutlined } from '@ant-design/icons'; // Импортируем иконку поиска
@@ -72,6 +72,40 @@ function ManagerDashboard() {
       setFilteredShipments(extra.currentDataSource);  // Сохраняем отфильтрованные данные для отправлений
     } else if (isViewing === 'requests') {
       setFilteredRequests(extra.currentDataSource);   // Сохраняем отфильтрованные данные для заявок
+    }
+  };
+
+  // Функция отправки писем
+  const handleSendEmails = async (shipment) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Token ${token}` };
+  
+      // Получаем все заявки, связанные с отправлением
+      const response = await axios.get(`${API_BASE_URL}/logistic/api/requests/`, { headers });
+      const relatedRequests = response.data.filter(request => request.shipment === shipment.id);
+  
+      // Извлекаем уникальные id клиентов
+      const clientIds = [...new Set(relatedRequests.map(request => request.client))];
+
+      // Находим читаемую метку статуса
+      const readableStatus = statusOptions.find((option) => option.value === shipment.status)?.label || shipment.status;
+  
+      // Подготовка писем для отправки
+      const emailPromises = clientIds.map(clientId =>
+        axios.post(`${API_BASE_URL}/logistic/api/send-email/`, {
+          client_id: clientId,  // Отправляем client_id, а не email
+          subject: `Отправление №${shipment.number}`,
+          message: `Статус отправления: ${readableStatus}\nКомментарий: ${shipment.comment}`,
+        }, { headers })
+      );
+  
+      // Отправляем письма
+      await Promise.all(emailPromises);
+      message.success('Письма отправлены всем клиентам');
+    } catch (error) {
+      console.error('Ошибка при отправке писем', error);
+      message.error('Ошибка при отправке писем');
     }
   };
 
@@ -1096,6 +1130,12 @@ const shipmentFileModal = (
                   {/*Удалить*/}
                 </Button>
               </Popconfirm>
+                <Button
+                  icon={<MailOutlined />}
+                  onClick={() => handleSendEmails(record)}  // Вызов функции отправки писем
+                  className="custom-small-btn"
+                />
+                {/*отправить письмо*/}
               </div>
           </span>
         );
