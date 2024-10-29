@@ -16,6 +16,7 @@
     "react-dom": "^18.3.1",
     "react-highlight-words": "^0.20.0",
     "react-i18next": "^15.0.3",
+    "react-keyed-file-browser": "^1.14.0",
     "react-router-dom": "^6.27.0",
     "react-scripts": "^5.0.1",
     "react-select": "^5.8.1",

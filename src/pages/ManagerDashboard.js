@@ -9,6 +9,8 @@ import { Space } from 'antd'; // Импортируем необходимые �
 import Highlighter from 'react-highlight-words'; // Для выделения найденных слов
 import { Modal } from 'antd';
 import { DatePicker } from 'antd';
+import FileManagementModal from './FileManagementModal';
+
 
 //const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
 const API_BASE_URL = localStorage.getItem('base_url');
@@ -37,6 +39,11 @@ function ManagerDashboard() {
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [isFileModalVisible, setIsFileModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState(null);  // Текущая запись, для которой открыто окно
+  const [currentShipmentRecord, setCurrentShipmentRecord] = useState(null);
+  const [selectedShipmentFiles, setSelectedShipmentFiles] = useState([]);
+  const [isShipmentFileModalVisible, setIsShipmentFileModalVisible] = useState(false);
+  const [currentFolder, setCurrentFolder] = useState(null); // Текущая папка
+
   
 
   const statusOptions = [
@@ -681,6 +688,62 @@ const fileModal = (
   </Modal>
 );
 
+// Открытие модального окна для работы с файлами отправления
+const openShipmentFileModal = (record) => {
+  setCurrentShipmentRecord(record);
+  fetchShipmentFiles(record.id); // Загружаем файлы и папки для отправления
+  setIsShipmentFileModalVisible(true);
+};
+
+// Закрытие модального окна для файлов
+/*const closeShipmentFileModal = () => {
+  setIsShipmentFileModalVisible(false);
+  setCurrentShipmentRecord(null);
+  setSelectedShipmentFiles([]);
+};*/
+const closeShipmentFileModal = () => {
+  setIsShipmentFileModalVisible(false);
+  setCurrentShipmentRecord(null); // Сбрасываем запись, чтобы избежать ошибки
+};
+
+// Функция для загрузки списка файлов и папок отправления
+const fetchShipmentFiles = async (shipmentId) => {
+  try {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
+    const response = await axios.get(`${API_BASE_URL}/logistic/api/shipments/${shipmentId}/files/`, { headers });
+
+    // Обновляем состояние для текущей записи отправления
+    setCurrentShipmentRecord((prevRecord) => ({
+      ...prevRecord,
+      files: response.data.files,
+      folders: response.data.folders
+    }));
+  } catch (error) {
+    console.error("Ошибка при загрузке файлов и папок", error);
+    message.error("Ошибка при загрузке файлов и папок");
+  }
+};
+
+
+// Модальное окно для управления файлами отправления с функциями для создания, удаления папок и работы с файлами
+const shipmentFileModal = (
+  /*<Modal
+    title="Управление файлами отправления"
+    open={isShipmentFileModalVisible}
+    onCancel={closeShipmentFileModal}
+    footer={null}
+  >*/
+    <FileManagementModal
+      visible={isShipmentFileModalVisible}
+      onClose={closeShipmentFileModal}
+      shipmentId={currentShipmentRecord?.id}
+      fetchShipmentFiles={() => fetchShipmentFiles(currentShipmentRecord.id)}
+      currentShipmentRecord={currentShipmentRecord}
+    />
+  /*</Modal>*/
+);
+
   //Поиск в сортировке
   const [searchText, setSearchText] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
@@ -982,6 +1045,16 @@ const fileModal = (
       sorter: (a, b) => a.status.localeCompare(b.status), // Сортировка по статусу
     },
     {
+      title: 'Файлы',
+      dataIndex: 'files',
+      key: 'files',
+      render: (text, record) => (
+        <Button icon={<UploadOutlined />} onClick={() => openShipmentFileModal(record)}>
+          Управление файлами
+        </Button>
+      ),
+    },
+    {
       title: 'Действия',
       render: (_, record) => {
         const editable = isEditing(record);
@@ -1270,6 +1343,7 @@ const fileModal = (
           </Form>
         </>
       )}
+      {shipmentFileModal}
 
       {isViewing === 'requests' && (
         <>
