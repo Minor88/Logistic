@@ -40,9 +40,11 @@ function ManagerDashboard() {
   const [isFileModalVisible, setIsFileModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState(null);  // Текущая запись, для которой открыто окно
   const [currentShipmentRecord, setCurrentShipmentRecord] = useState(null);
-  const [selectedShipmentFiles, setSelectedShipmentFiles] = useState([]);
+  //const [selectedShipmentFiles, setSelectedShipmentFiles] = useState([]);
   const [isShipmentFileModalVisible, setIsShipmentFileModalVisible] = useState(false);
-  const [currentFolder, setCurrentFolder] = useState(null); // Текущая папка
+  //const [currentFolder, setCurrentFolder] = useState(null); // Текущая папка
+  const [shipmentFilter, setShipmentFilter] = useState(null);
+  const [isShipmentFilterActive, setIsShipmentFilterActive] = useState(false); // Отслеживаем активацию фильтра
 
   
 
@@ -74,6 +76,40 @@ function ManagerDashboard() {
       setFilteredRequests(extra.currentDataSource);   // Сохраняем отфильтрованные данные для заявок
     }
   };
+
+  //переход в отфильтрованные заявки из отправлений
+  const handleViewRequestsForShipment = (shipmentNumber) => {
+    setShipmentFilter(shipmentNumber); // Устанавливаем номер отправления для фильтра
+    setIsShipmentFilterActive(true); // Активируем фильтр
+    setIsViewing('requests'); // Переход на отображение заявок
+    
+    // Устанавливаем значение поиска в колонке 'Отправление'
+    setSearchText(shipmentNumber);
+    setSearchedColumn('shipment');
+  
+    // Триггерим поиск в таблице
+    if (searchInput.current) {
+      searchInput.current.input.value = shipmentNumber; // Проставляем значение в инпут
+    }
+  };
+  
+  
+  // Обновление useEffect для сброса фильтра
+  useEffect(() => {
+  
+    if (isViewing === 'requests' && shipmentFilter) {
+      const filtered = requests.filter((request) => {
+        const shipment = shipments.find((s) => s.id === request.shipment);
+        const match = shipment ? shipment.number.includes(shipmentFilter) : false;
+        return match;
+      });
+  
+      setFilteredRequests(filtered);
+    } else {
+      setFilteredRequests(requests);  // Возвращаем все заявки, если фильтр неактивен
+    }
+  }, [isViewing, shipmentFilter, requests, shipments]);
+
 
   // Функция отправки писем
   const handleSendEmails = async (shipment) => {
@@ -788,10 +824,57 @@ const shipmentFileModal = (
     setSearchedColumn(dataIndex);
   };
 
-  const handleReset = (clearFilters) => {
+  /*const handleReset = (clearFilters) => {
     clearFilters();
     setSearchText('');
+  };*/
+  const handleReset = (clearFilters, dataIndex) => {
+    clearFilters();
+    setSearchText('');
+    setSearchedColumn('');
+  
+    if (dataIndex === 'shipment') {
+      setShipmentFilter(null);  // Сброс фильтра по отправлению
+      setIsShipmentFilterActive(false);  // Деактивация фильтра
+      fetchRequests();  // Загрузка всех заявок
+    }
   };
+
+  // Функция поиска по колонке "shipment"
+  const getColumnShipmentSearchProps = (dataIndex) => ({
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+      <div style={{ padding: 8 }}>
+        <Input
+          ref={searchInput}
+          placeholder={`Поиск по ${dataIndex}`}
+          value={selectedKeys[0]}
+          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
+          style={{ marginBottom: 8, display: 'block' }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Поиск
+          </Button>
+          <Button onClick={() => handleReset(clearFilters, dataIndex)} size="small" style={{ width: 90 }}>
+            Сброс
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
+    onFilter: (value, record) => {
+      const shipment = shipments.find((s) => s.id === record.shipment);
+      return shipment ? shipment.number.includes(value) : false;
+    },
+  });
+
 
   const getColumnSearchProps = (dataIndex) => ({
     filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
@@ -1060,10 +1143,27 @@ const shipmentFileModal = (
       defaultSortOrder: 'ascend',  // По умолчанию сортируем по возрастанию (раньше - выше)
       ...getColumnDateFilterProps('created_at'),  // Добавляем фильтрацию по диапазону дат
     },
-    { title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
+    /* title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
       sorter: (a, b) => a.number.localeCompare(b.number),//поиск
       ...getColumnSearchProps('number'),
-     },
+     */
+     {
+      title: 'Номер',
+      dataIndex: 'number',
+      key: 'number',
+      editable: true,
+      sorter: (a, b) => a.number.localeCompare(b.number),
+      ...getColumnShipmentSearchProps('number'),
+      render: (text, record) => (
+        <Button
+          type="link"
+          onClick={() => handleViewRequestsForShipment(text)}
+          style={{ padding: 0 }}
+        >
+          {text}
+        </Button>
+      ),
+    },
     { title: 'Комментарий', dataIndex: 'comment', key: 'comment', editable: true },
     {
       title: 'Статус',
@@ -1211,7 +1311,8 @@ const shipmentFileModal = (
       dataIndex: 'shipment',
       key: 'shipment',
       editable: true,
-      ...getColumnSearchProps('shipment'), // Добавляем поиск по отправлению
+      //...getColumnSearchProps('shipment'), // Добавляем поиск по отправлению
+      ...getColumnShipmentSearchProps('shipment'), // Добавляем поиск по отправлению
       sorter: (a, b) => {
         const shipmentA = shipments.find((s) => s.id === a.shipment)?.number || '';
         const shipmentB = shipments.find((s) => s.id === b.shipment)?.number || '';
@@ -1223,7 +1324,10 @@ const shipmentFileModal = (
       },
       onFilter: (value, record) => {
         const shipment = shipments.find((s) => s.id === record.shipment);
-        return shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        const match = shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        //return shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        console.log(`Применение фильтра в колонке 'Отправление': значение - ${value}, номер - ${shipment?.number || 'Нет данных'}, результат - ${match}`);
+        return match;
       },
     },
     {
@@ -1401,7 +1505,8 @@ const shipmentFileModal = (
               },
             }}
             bordered
-            dataSource={requests}
+            //dataSource={requests}
+            dataSource={isShipmentFilterActive ? filteredRequests : requests} // Используем filteredRequests при активном фильтре
             columns={mergedColumnsRequests}
             rowClassName="editable-row"
             pagination={{ pageSize: 30, onChange: cancel }}
