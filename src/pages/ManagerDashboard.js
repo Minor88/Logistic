@@ -10,6 +10,7 @@ import Highlighter from 'react-highlight-words'; // Для выделения н
 import { Modal } from 'antd';
 import { DatePicker } from 'antd';
 import FileManagementModal from './FileManagementModal';
+import { InputNumber } from 'antd';
 
 
 //const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
@@ -22,7 +23,7 @@ const normalizeDecimalInput = (value) => {
   return value.replace(',', '.');
 };
 
-function ManagerDashboard() {
+function ManagerDashboard({ children }) {
   const [shipments, setShipments] = useState([]);
   const [clients, setClients] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -46,6 +47,12 @@ function ManagerDashboard() {
   const [shipmentFilter, setShipmentFilter] = useState(null);
   const [isShipmentFilterActive, setIsShipmentFilterActive] = useState(false); // Отслеживаем активацию фильтра
 
+  const [requestsFilteredInfo, setRequestsFilteredInfo] = useState({});
+  const [requestsSortedInfo, setRequestsSortedInfo] = useState({
+    columnKey: 'created_at',
+    order: 'ascend',
+  });
+
   
 
   const statusOptions = [
@@ -67,6 +74,19 @@ function ManagerDashboard() {
     { value: 'ready', label: 'Готово к выдаче' },
     { value: 'delivered', label: 'Выдано' }
   ];
+
+  //Функция сброса фильтров в заявках
+  const resetFiltersRequests = () => {
+    form.resetFields(); // Сброс полей формы редактирования
+    setRequestsFilteredInfo({}); // Сбрасываем фильтры
+    setRequestsSortedInfo({ columnKey: 'created_at', order: 'ascend' }); // Устанавливаем сортировку по умолчанию
+    setSearchText(''); // Очищаем текст поиска
+    setSearchedColumn(''); // Сбрасываем колонку поиска
+    setShipmentFilter(null); // Убираем фильтр по отправлению
+    setIsShipmentFilterActive(false); // Деактивируем фильтр отправления
+    // Возвращаем исходные данные в таблицу
+    setFilteredRequests(requests);
+};
 
   // Обработчик изменений таблицы
   const handleTableChange = (pagination, filters, sorter, extra) => {
@@ -1080,7 +1100,7 @@ const shipmentFileModal = (
     }
   };
 
-  const EditableCell = ({
+  /*const EditableCell = ({
     editing,
     dataIndex,
     title,
@@ -1133,7 +1153,74 @@ const shipmentFileModal = (
         )}
       </td>
     );
+  };*/
+
+  const EditableCell = ({
+    editing,
+    dataIndex,
+    title,
+    inputType,
+    record,
+    index,
+    children,
+    ...restProps
+  }) => {
+    // Выбираем, какой набор статусов использовать: для отправлений или для заявок
+    const statusOptionsToUse = dataIndex === 'status' && isViewing === 'shipments'
+      ? statusOptions
+      : statusOptionsRequests;
+
+
+    const inputNode = dataIndex === 'status' || dataIndex === 'client' || dataIndex === 'shipment' ? (
+      <Select
+        showSearch  // Добавляем поиск
+        optionFilterProp="children"  // Фильтрация происходит по содержимому option
+        filterOption={(input, option) =>
+          option.children.toLowerCase().includes(input.toLowerCase())
+        }  // Логика фильтрации
+      >
+        {dataIndex === 'status' &&
+          statusOptionsToUse.map((option) => <Option key={option.value} value={option.value}>{option.label}</Option>)}
+        {dataIndex === 'client' &&
+          clients.map((client) => <Option key={client.id} value={client.id}>{client.name}</Option>)}
+        {dataIndex === 'shipment' &&
+          shipments.map((shipment) => <Option key={shipment.id} value={shipment.id}>{shipment.number}</Option>)}
+      </Select>
+    ) : dataIndex === 'actual_weight' || dataIndex === 'actual_volume' || dataIndex === 'declared_weight' || dataIndex === 'declared_volume' ? (
+        <InputNumber
+          value={record[dataIndex]}
+          onChange={(value) => {
+            record[dataIndex] = value;
+          }}
+          type="number"
+        />
+    ) : (
+      <Input />
+    );
+
+
+    return (
+      <td {...restProps}>
+        {editing ? (
+          <Form.Item
+            name={dataIndex}
+            style={{ margin: 0 }}
+            rules={
+              // Для определенных полей правила валидации убираем, делаем необязательными
+              ['comment', 'number', 'warehouse_number', 'declared_weight', 'warehouse', 'description', 'declared_volume', 'actual_weight', 'actual_volume', 'rate', 'shipment'].includes(dataIndex)
+                ? [] // Эти поля необязательные
+                : [{ required: true, message: `Пожалуйста, введите ${title}!` }] // Все остальные поля обязательны
+            }
+          >
+            {inputNode}
+          </Form.Item>
+        ) : (
+          children
+        )}
+      </td>
+    );
   };
+  
 
 
   const columnsShipments = [
@@ -1253,6 +1340,7 @@ const shipmentFileModal = (
     },
     { title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
       //sorter: (a, b) => a.number.localeCompare(b.number), //Сортировакка
+      sorter: (a, b) => (a.number || 0) - (b.number || 0),
       ...getColumnSearchProps('number'), // Фильтрация и поиск по номеру
      },
     { title: 'Складской №', dataIndex: 'warehouse_number', key: 'warehouse_number', editable: true,
@@ -1460,6 +1548,7 @@ const shipmentFileModal = (
       <div className="tab-buttons">
         <Button type="default" onClick={() => setIsViewing('shipments')}>Отправления</Button>
         <Button type="default" onClick={() => setIsViewing('requests')}>Заявки</Button>
+        {children}
       </div>
 
       {isViewing === 'shipments' && (
@@ -1494,7 +1583,17 @@ const shipmentFileModal = (
           <h3>Заявки</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
           <Button type="primary" onClick={showRequestModal}>Создать заявку</Button>
-          <ExportButton data={filteredRequests} columns={columnsRequests} fileName="Заявки" />
+          <div>
+              <Button
+                type="default"
+                onClick={resetFiltersRequests} // Привязываем функцию сброса
+                icon={<CloseOutlined />}
+                style={{ marginRight: '10px' }}
+              >
+                Сбросить фильтры
+              </Button>
+              <ExportButton data={filteredRequests} columns={columnsRequests} fileName="Заявки" />
+            </div>
           </div>
           {requestModal}
           <Form form={form} component={false}>
@@ -1507,10 +1606,19 @@ const shipmentFileModal = (
             bordered
             //dataSource={requests}
             dataSource={isShipmentFilterActive ? filteredRequests : requests} // Используем filteredRequests при активном фильтре
-            columns={mergedColumnsRequests}
+            //columns={mergedColumnsRequests}
+            columns={mergedColumnsRequests.map((col) => ({
+              ...col,
+              filteredValue: requestsFilteredInfo[col.dataIndex] || null,
+              sortOrder: requestsSortedInfo.columnKey === col.dataIndex ? requestsSortedInfo.order : null,
+            }))}
             rowClassName="editable-row"
             pagination={{ pageSize: 30, onChange: cancel }}
-            onChange={handleTableChange}  // Добавляем обработчик для отслеживания изменений фильтров и сортировки
+            //onChange={handleTableChange}  // Добавляем обработчик для отслеживания изменений фильтров и сортировки
+            onChange={(pagination, filters, sorter) => {
+              setRequestsFilteredInfo(filters); // Сохраняем фильтры для заявок
+              setRequestsSortedInfo(sorter); // Сохраняем сортировку для заявок
+            }}
           />
           </Form>
         </>

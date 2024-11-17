@@ -164,3 +164,53 @@ button.custom-small-btn:last-child {
   margin-right: 0; /* Убираем отступ у последней кнопки */
   margin-bottom: 6px; /* Добавляем нижний отступ, если кнопки одна под другой */
 }
+
+/*Финансы*/
+.finance-menu {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.finance-menu button {
+  margin-right: 20px;
+}
+
+.article-form-button {
+  margin-right: 20px;
+}
+
+.article-form-input {
+  width: 200px;
+}
+
+.ant-form.finance-form{
+  font-size: 8px;
+}
+
+.finance-form .ant-select-selection-search-input {
+  width: 200px !important;
+  height: 25px !important;
+}
+
+.finance-form .ant-form-item {
+  margin-bottom: 10px;
+}
+
+.finance-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.finance-buttons-left {
+  display: flex;
+  gap: 10px; /* Отступ между кнопками слева */
+}
+
+.finance-button-right {
+  display: flex;
+  align-items: center;
+}

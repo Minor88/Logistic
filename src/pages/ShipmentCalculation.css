@@ -1,0 +1,89 @@
+.shipment-calculation-container {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+  }
+  
+  .shipment-calculation-header {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 20px;
+  }
+  
+  .shipment-calculation-select {
+    margin-bottom: 15px;
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+  }
+  
+  .shipment-calculation-select label {
+    margin-right: 10px;
+    font-weight: bold;
+  }
+  
+  .shipment-calculation-input-group {
+    display: flex;
+    align-items: center;
+    margin-bottom: 15px;
+    gap: 10px;
+  }
+  
+  .shipment-calculation-input-group label {
+    font-size: 12px;
+    font-weight: bold;
+  }
+  
+  .shipment-calculation-input {
+    width: 100px;
+  }
+  
+  .shipment-calculation-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  
+  .shipment-calculation-actions .action-buttons {
+    display: flex;
+    gap: 10px; /* Расстояние между кнопками */
+  }
+  
+  .shipment-calculation-actions .export-button {
+    margin-left: auto;
+  }
+  
+  .shipment-calculation-table {
+    margin-top: 20px;
+    font-size: 12px;
+  }
+  
+  .shipment-expenses-table {
+    margin-top: 30px;
+    font-size: 12px;
+  }
+  
+  .ant-btn {
+    font-size: 12px;
+  }
+
+  .shipment-calculation-actions .action-buttons .ant-btn,
+.shipment-calculation-actions .export-button .ant-btn {
+  background-color: #4CAF50; /* Основной зеленый цвет */
+  border-color: #4CAF50;
+  color: white;
+}
+
+.shipment-calculation-actions .action-buttons .ant-btn:hover,
+.shipment-calculation-actions .export-button .ant-btn:hover {
+  background-color: #45a049; /* Темнее при наведении */
+  border-color: #45a049;
+  color: white;
+}
+
+.shipment-calculation-actions .action-buttons .ant-btn:focus,
+.shipment-calculation-actions .export-button .ant-btn:focus {
+  background-color: #45a049; /* Темнее при фокусе */
+  border-color: #45a049;
+  color: white;
+}

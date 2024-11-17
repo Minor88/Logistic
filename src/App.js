@@ -6,6 +6,7 @@ import Login from './pages/Login';
 import ManagerDashboard from './pages/ManagerDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 import WarehouseDashboard from './pages/WarehouseDashboard';
+import BossDashboard from './pages/BossDashboard';
 import ProtectedRoute from './components/ProtectedRoute';  // Импорт нового компонента
 
 function App() {
@@ -34,6 +35,14 @@ function App() {
           element={
             <ProtectedRoute>
               <WarehouseDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/boss"
+          element={
+            <ProtectedRoute>
+              <BossDashboard />
             </ProtectedRoute>
           }
         />

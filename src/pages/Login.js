@@ -63,6 +63,8 @@ function Login() {
         navigate('/client');
       } else if (user_group === 'warehouse') {
         navigate('/warehouse');
+      } else if (user_group === 'boss') {
+        navigate('/boss');
       }
     } catch (error) {
       console.error("Ошибка авторизации", error);

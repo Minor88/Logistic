@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { Table, Input, Button, Select, Popconfirm, Form, Upload, message } from 'antd';
-import { UploadOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, CheckOutlined, CloseOutlined } from '@ant-design/icons';
+import { UploadOutlined, DeleteOutlined, DownloadOutlined, EditOutlined, CheckOutlined, CloseOutlined, MailOutlined } from '@ant-design/icons';
 import * as XLSX from 'xlsx';  // Импортируем библиотеку для работы с Excel
 import './ManagerDashboard.css';  // Подключаем стили
 import { SearchOutlined } from '@ant-design/icons'; // Импортируем иконку поиска
@@ -9,7 +9,12 @@ import { Space } from 'antd'; // Импортируем необходимые �
 import Highlighter from 'react-highlight-words'; // Для выделения найденных слов
 import { Modal } from 'antd';
 import { DatePicker } from 'antd';
+import FileManagementModal from './FileManagementModal';
 import { InputNumber } from 'antd';
+import moment from 'moment';  // Убедитесь, что moment импортирован
+import ShipmentCalculation from './ShipmentCalculation'; // Импортируем компонент ShipmentCalculation
+
+
 
 //const API_BASE_URL = process.env.REACT_APP_API_BASE_URL_LOCAL; // Локальная среда
 const API_BASE_URL = localStorage.getItem('base_url');
@@ -21,7 +26,7 @@ const normalizeDecimalInput = (value) => {
   return value.replace(',', '.');
 };
 
-function ManagerDashboard() {
+function BossDashboard({ children }) {
   const [shipments, setShipments] = useState([]);
   const [clients, setClients] = useState([]);
   const [requests, setRequests] = useState([]);
@@ -34,18 +39,37 @@ function ManagerDashboard() {
   const [isShipmentModalVisible, setIsShipmentModalVisible] = useState(false);
   const [isRequestModalVisible, setIsRequestModalVisible] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
-  //const [filteredShipments, setFilteredShipments] = useState([]);
+  const [filteredShipments, setFilteredShipments] = useState([]);
   const [filteredRequests, setFilteredRequests] = useState([]);
   const [isFileModalVisible, setIsFileModalVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState(null);  // Текущая запись, для которой открыто окно
-
+  const [currentShipmentRecord, setCurrentShipmentRecord] = useState(null);
+  const [isShipmentFileModalVisible, setIsShipmentFileModalVisible] = useState(false);
   const [shipmentFilter, setShipmentFilter] = useState(null);
   const [isShipmentFilterActive, setIsShipmentFilterActive] = useState(false); // Отслеживаем активацию фильтра
+  const [isArticleFormVisible, setIsArticleFormVisible] = useState(false);
+  const [articles, setArticles] = useState([]);
+  const [article, setArticle] = useState({});
+  const [finances, setFinances] = useState([]);
+  const [editingFinanceKey, setEditingFinanceKey] = useState('');
+  const [shipmentsFilteredInfo, setShipmentsFilteredInfo] = useState({});
+  const [shipmentsSortedInfo, setShipmentsSortedInfo] = useState({
+    columnKey: 'created_at',
+    order: 'ascend',
+  });
+
   const [requestsFilteredInfo, setRequestsFilteredInfo] = useState({});
   const [requestsSortedInfo, setRequestsSortedInfo] = useState({
     columnKey: 'created_at',
     order: 'ascend',
   });
+
+  const [financesFilteredInfo, setFinancesFilteredInfo] = useState({});
+  const [financesSortedInfo, setFinancesSortedInfo] = useState({
+    columnKey: 'number',
+    order: 'ascend',
+  });
+
   
 
   const statusOptions = [
@@ -68,7 +92,22 @@ function ManagerDashboard() {
     { value: 'delivered', label: 'Выдано' }
   ];
 
-  //Функция сброса фильтров в заявках
+  // Функция сброса фильтров в таблице заявок
+  /*const resetFiltersRequests = () => {
+    form.resetFields(); // Сброс полей формы редактирования
+    setFilteredInfo({}); // Сбрасываем активные фильтры
+    setSortedInfo({ columnKey: 'created_at', order: 'ascend' }); // Сбрасываем сортировку, устанавливаем по умолчанию (по дате создания)
+    setSearchText(''); // Сбрасываем текст поиска
+    setSearchedColumn(''); // Сбрасываем колонку поиска
+    setShipmentFilter(null); // Убираем фильтр по отправлению, если он есть
+    setIsShipmentFilterActive(false); // Деактивируем фильтр отправления
+    
+    // Сбрасываем отображение данных таблицы
+    setFilteredRequests([]); // Временно очищаем
+    setTimeout(() => {
+      setFilteredRequests([...requests]); // Возвращаем исходные данные
+    }, 0);
+  };*/
   const resetFiltersRequests = () => {
     form.resetFields(); // Сброс полей формы редактирования
     setRequestsFilteredInfo({}); // Сбрасываем фильтры
@@ -81,19 +120,863 @@ function ManagerDashboard() {
     setFilteredRequests(requests);
 };
 
+  // Кнопка экспорта для финансов
+  const ExportButtonFinance = ({ data, columns, fileName, shipments, requests }) => (
+    <Button
+      type="primary"
+      icon={<DownloadOutlined />}
+      onClick={() => exportToExcelFinance(data, columns, fileName, shipments, requests)}
+    >
+      Экспортировать счета и оплаты
+    </Button>
+  );
+
+  // Функция для экспорта данных финансов в Excel, включая маппинг для Отправления и Заявки
+  const exportToExcelFinance = (data, columns, fileName, shipments, requests) => {
+    // Создаем массив для экспорта
+    const exportData = data.map((item) => {
+      const row = {};
+
+      // Преобразуем каждый элемент данных в объект для экспорта
+      columns.forEach((col) => {
+        if (col.dataIndex === 'counterparty') {
+          // Преобразование id контрагента в имя
+          const client = clients.find((c) => c.id === item[col.dataIndex]);
+          row[col.title] = client ? client.name : '';
+        } else if (col.dataIndex === 'operation_type') {
+          // Маппинг для Типа операции
+          row[col.title] = operationTypeMapping[item[col.dataIndex]] || item[col.dataIndex];
+        } else if (col.dataIndex === 'document_type') {
+          // Маппинг для Типа документа
+          row[col.title] = documentTypeMapping[item[col.dataIndex]] || item[col.dataIndex];
+        } else if (col.dataIndex === 'currency') {
+          // Маппинг для Валюты
+          row[col.title] = currencyMapping[item[col.dataIndex]] || item[col.dataIndex];
+        } else if (col.dataIndex === 'article') {
+          // Преобразование id статьи в имя статьи
+          const article = articles.find((a) => a.id === item[col.dataIndex]);
+          row[col.title] = article ? article.name : '';
+        } else if (col.dataIndex === 'shipment') {
+          // Преобразование id отправления в номер отправления
+          const shipment = shipments.find((s) => s.id === item[col.dataIndex]);
+          row[col.title] = shipment ? shipment.number : '';
+        } else if (col.dataIndex === 'request') {
+          // Преобразование id заявки в номер заявки
+          const request = requests.find((r) => r.id === item[col.dataIndex]);
+          row[col.title] = request ? request.number : '';
+        } else if (col.dataIndex === 'created_at' || col.dataIndex === 'payment_date') {
+          // Форматируем дату
+          row[col.title] = new Date(item[col.dataIndex]).toLocaleDateString();
+        } else if (col.dataIndex !== 'files' && col.dataIndex !== 'actions') {
+          // Добавляем все остальные колонки, исключая файлы и действия
+          row[col.title] = item[col.dataIndex] || '';
+        }
+      });
+
+      return row;
+    });
+
+    // Создаем новую книгу Excel и добавляем данные
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Data');
+
+    // Генерируем Excel файл и загружаем
+    XLSX.writeFile(workbook, `${fileName}.xlsx`);
+  };
+
   // Обработчик изменений таблицы
-  /*const handleTableChange = (pagination, filters, sorter, extra) => {
+  const handleTableChange = (pagination, filters, sorter, extra) => {
     if (isViewing === 'shipments') {
       setFilteredShipments(extra.currentDataSource);  // Сохраняем отфильтрованные данные для отправлений
     } else if (isViewing === 'requests') {
       setFilteredRequests(extra.currentDataSource);   // Сохраняем отфильтрованные данные для заявок
-    }
-  };*/
-  const handleTableChange = (pagination, filters, sorter, extra) => {
-    if (isViewing === 'requests') {
-      setFilteredRequests(extra.currentDataSource);   // Сохраняем отфильтрованные данные для заявок
+    }  else if (isViewing === 'finance') {
+      setFinances(extra.currentDataSource);  // Сохраняем отфильтрованные данные для финансов
     }
   };
+
+  //Работа с движением денег
+  const operationTypeMapping = {
+    'in': 'Входящий',
+    'out': 'Исходящий'
+  };
+  
+  const documentTypeMapping = {
+    'bill': 'Счёт',
+    'payment': 'Оплата'
+  };
+  
+  const currencyMapping = {
+    'rub': 'Рубль',
+    'rubbn': 'Безнал',
+    'rubnds': 'НДС',
+    'eur': 'Евро',
+    'usd': 'Доллар'
+  };
+  
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/logistic/api/articles/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setArticles(response.data);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
+
+  //Форма создания Счёта или оплаты
+ //Создание счёта и оплаты 2.0
+
+  // Функция для создания новой строки и отправки её на сервер
+const createNewFinanceRow = async () => {
+  resetFilters(); // Сбрасываем все фильтры перед созданием новой записи
+  const token = localStorage.getItem('token');
+  const headers = { Authorization: `Token ${token}` };
+  
+  // Данные с обязательными полями для создания записи
+  const newFinanceData = {
+    operation_type: 'in', // или другой начальный тип
+    payment_date: moment().format('YYYY-MM-DD'),
+    document_type: 'bill', // или другой начальный тип документа
+    currency: 'rub', // или другая валюта по умолчанию
+    amount: 0.0 // начальная сумма
+  };
+
+  try {
+    // Создание новой записи на сервере
+    const response = await axios.post(`${API_BASE_URL}/logistic/api/finance/`, newFinanceData, { headers });
+    const createdFinance = response.data;
+
+    // Добавление новой записи в состояние и активация её редактирования
+    setFinances([...finances, createdFinance]);
+    setEditingFinanceKey(createdFinance.number); // Включаем режим редактирования для новой строки
+
+  } catch (error) {
+    console.error('Ошибка при создании записи', error);
+    message.error('Ошибка при создании новой записи');
+  }
+};
+  
+  // Обновленная функция отмены для новой строки
+  const cancelFinance = () => {
+    setEditingFinanceKey('');
+  };
+
+  // Функция для фильтрации по дате
+const getColumnDateFilterProps1 = (dataIndex) => ({
+  filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+    <div style={{ padding: 8 }}>
+      <DatePicker
+        onChange={(date) => {
+          setSelectedKeys(date ? [date.startOf('day').toISOString()] : []);
+        }}
+        style={{ width: '100%' }}
+      />
+      <Space>
+        <Button type="primary" onClick={() => confirm()} size="small" style={{ width: 90 }}>
+          Применить
+        </Button>
+        <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+          Сбросить
+        </Button>
+      </Space>
+    </div>
+  ),
+  onFilter: (value, record) => moment(record[dataIndex]).isSame(value, 'day'),
+  render: (date) => date ? moment(date).format('YYYY-MM-DD') : '',
+});
+
+
+  // Функция для фильтрации и поиска по тексту
+const getColumnSearchProps1 = (dataIndex) => ({
+  filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+    <div style={{ padding: 8 }}>
+      <Input
+        placeholder={`Поиск ${dataIndex}`}
+        value={selectedKeys[0]}
+        onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+        onPressEnter={() => confirm()}
+        style={{ marginBottom: 8, display: 'block' }}
+      />
+      <Space>
+        <Button type="primary" onClick={() => confirm()} size="small" style={{ width: 90 }}>
+          Применить
+        </Button>
+        <Button onClick={() => clearFilters()} size="small" style={{ width: 90 }}>
+          Сбросить
+        </Button>
+      </Space>
+    </div>
+  ),
+  onFilter: (value, record) =>
+    record[dataIndex] ? record[dataIndex].toString().toLowerCase().includes(value.toLowerCase()) : '',
+});
+
+// Функция для поиска в выпадающем списке
+const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
+  filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+    <div style={{ padding: 8 }}>
+      <Select
+        showSearch
+        placeholder={`Поиск ${dataIndex}`}
+        optionFilterProp="children"
+        onChange={(value) => {
+          setSelectedKeys(value ? [value] : []);
+          confirm();
+        }}
+        onClear={() => clearFilters()}
+        allowClear
+        style={{ width: '100%' }}
+      >
+        {data.map((item) => (
+          <Select.Option key={item.id || item.number} value={item.id || item.number}> {/* Убедитесь в наличии key */}
+            {item[nameProp]}
+          </Select.Option>
+        ))}
+      </Select>
+    </div>
+  ),
+  onFilter: (value, record) => record[dataIndex] === value,
+});
+
+  const mergedColumnsFinance = [
+    {
+      title: 'Номер',
+      dataIndex: 'number',
+      key: 'number',
+      editable: false,
+      sorter: (a, b) => b.number - a.number,
+      defaultSortOrder: 'ascend',  // сортировка от большего к меньшему по умолчанию
+      ...getColumnSearchProps1('number'),  // добавляем поиск по номеру
+    },
+    {
+      title: 'Дата создания',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      editable: false,
+      render: (date) => date ? moment(date).format('YYYY-MM-DD') : 'Нет данных',
+      ...getColumnDateFilterProps1('created_at'),  // добавляем фильтр по дате
+    },
+    {
+      title: 'Тип операции',
+      dataIndex: 'operation_type',
+      key: 'operation_type',
+      editable: true,
+      render: (text) => operationTypeMapping[text] || text,
+      filters: Object.entries(operationTypeMapping).map(([value, label]) => ({ text: label, value, key: value })), // добавляем уникальный ключ
+      onFilter: (value, record) => record.operation_type === value,
+    },
+    {
+      title: 'Дата оплаты',
+      dataIndex: 'payment_date',
+      key: 'payment_date',
+      editable: true,
+      render: (date) => date ? moment(date).format('YYYY-MM-DD') : 'Нет данных',
+      ...getColumnDateFilterProps1('payment_date'),  // добавляем фильтр по дате
+    },
+    {
+      title: 'Тип документа',
+      dataIndex: 'document_type',
+      key: 'document_type',
+      editable: true,
+      render: (text) => documentTypeMapping[text] || text,
+      filters: Object.entries(documentTypeMapping).map(([value, label]) => ({ text: label, value, key: value })), // добавляем уникальный ключ
+      onFilter: (value, record) => record.document_type === value,
+    },
+    {
+      title: 'Валюта',
+      dataIndex: 'currency',
+      key: 'currency',
+      editable: true,
+      render: (text) => currencyMapping[text] || text,
+      filters: Object.entries(currencyMapping).map(([value, label]) => ({ text: label, value })), // фильтр по валютам
+      onFilter: (value, record) => record.currency === value,
+    },
+    {
+      title: 'Контрагент',
+      dataIndex: 'counterparty',
+      key: 'counterparty',
+      editable: true,
+      render: (counterpartyId) => {
+        const counterparty = clients.find((c) => c.id === counterpartyId);
+        return counterparty ? counterparty.name : 'Нет данных';
+      },
+      ...getColumnSelectSearchProps1('counterparty', clients, 'name'),  // добавляем поиск по наименованиям контрагентов
+    },
+    {
+      title: 'Статья',
+      dataIndex: 'article',
+      key: 'article',
+      editable: true,
+      render: (articleId) => {
+        const article = articles.find((a) => a.id === articleId);
+        return article ? article.name : 'Нет данных';
+      },
+      filters: articles.map((article) => ({ text: article.name, value: article.id })),  // фильтр по статьям
+      onFilter: (value, record) => record.article === value,
+    },
+    {
+      title: 'Сумма',
+      dataIndex: 'amount',
+      key: 'amount',
+      editable: true,
+    },
+    {
+      title: 'Комментарий',
+      dataIndex: 'comment',
+      key: 'comment',
+      editable: true,
+      ...getColumnSearchProps1('comment'),  // добавляем поиск по комментарию
+    },
+    {
+      title: 'Отправление',
+      dataIndex: 'shipment',
+      key: 'shipment',
+      editable: true,
+      render: (shipmentId) => {
+        const shipment = shipments.find((s) => s.id === shipmentId);
+        return shipment ? shipment.number : 'Нет данных';
+      },
+      ...getColumnSelectSearchProps1('shipment', shipments, 'number'),  // добавляем поиск по отправлениям
+    },
+    {
+      title: 'Заявка',
+      dataIndex: 'request',
+      key: 'request',
+      editable: true,
+      render: (requestId) => {
+        const request = requests.find((r) => r.id === requestId);
+        return request ? request.number : 'Нет данных';
+      },
+      ...getColumnSelectSearchProps1('basis', finances, 'number'),  // добавляем поиск по основаниям
+    },
+    {
+      title: 'Основание',
+      dataIndex: 'basis',
+      key: 'basis',
+      editable: true,
+      render: (basisId) => {
+        const basis = finances.find((f) => f.number === basisId);
+        return basis ? basis.number : 'Нет данных';
+      },
+      ...getColumnSelectSearchProps1('basis', finances, 'number'),  // добавляем поиск по основаниям
+    },
+    {
+      title: 'Действия',
+      dataIndex: 'actions',
+      key: 'actions',
+      render: (_, record) => {
+        const editable = isEditingFinance(record);
+        return editable ? (
+          <Space>
+            <Button icon={<CheckOutlined />} onClick={() => saveFinance(record.number)} className="custom-small-btn" />
+            <Button icon={<CloseOutlined />} onClick={cancelFinance} className="custom-small-btn" />
+          </Space>
+        ) : (
+          <Space>
+            <Button icon={<EditOutlined />} onClick={() => editFinance(record)} className="custom-small-btn" />
+            <Popconfirm title="Удалить запись?" onConfirm={() => deleteFinance(record.number)}>
+              <Button danger icon={<DeleteOutlined />} />
+            </Popconfirm>
+          </Space>
+        );
+      },
+    },
+  ].map((col) => {
+    if (!col.editable) {
+      return col;
+    }
+    return {
+      ...col,
+      onCell: (record) => ({
+        record,
+        inputType:
+          col.dataIndex === 'operation_type' ||
+          col.dataIndex === 'document_type' ||
+          col.dataIndex === 'currency' ||
+          col.dataIndex === 'counterparty' ||
+          col.dataIndex === 'article'
+            ? 'select'
+            : 'text',
+        dataIndex: col.dataIndex,
+        title: col.title,
+        editing: isEditingFinance(record), // Используем проверку `isEditingFinance`
+    }),
+    }
+});
+  
+  
+  const EditableFinanceCell = ({
+    editing,
+    dataIndex,
+    title,
+    inputType,
+    record,
+    index,
+    children,
+    ...restProps
+  }) => {
+
+    const handleDateChange = (e) => {
+      record[dataIndex] = e.target.value; // Обновляем значение даты в record
+    };
+
+
+    const inputNode = ['operation_type', 'document_type', 'currency', 'counterparty', 'article', 'shipment', 'request', 'basis'].includes(dataIndex) ? (
+      <Select
+        showSearch  // Включаем поиск
+        optionFilterProp="children"  // Фильтрация по содержимому option
+        allowClear  // Позволяет очищать выбор
+        filterOption={(input, option) => {
+          if (option.children) {
+            return option.children.toString().toLowerCase().includes(input.toLowerCase());
+          }
+          return false;
+        }}
+      >
+        {dataIndex === 'operation_type' && Object.entries(operationTypeMapping).map(([value, label]) => (
+          <Option key={value} value={value}>{label}</Option>
+        ))}
+        {dataIndex === 'document_type' && Object.entries(documentTypeMapping).map(([value, label]) => (
+          <Option key={value} value={value}>{label}</Option>
+        ))}
+        {dataIndex === 'currency' && Object.entries(currencyMapping).map(([value, label]) => (
+          <Option key={value} value={value}>{label}</Option>
+        ))}
+        {dataIndex === 'counterparty' && clients.map((client) => (
+          <Option key={client.id} value={client.id}>{client.name}</Option>
+        ))}
+        {dataIndex === 'article' && articles.map((article) => (
+          <Option key={article.id} value={article.id}>{article.name}</Option>
+        ))}
+        {dataIndex === 'shipment' && shipments.map((shipment) => (
+          <Option key={shipment.id} value={shipment.id}>{shipment.number}</Option>
+        ))}
+        {dataIndex === 'request' && requests.map((request) => (
+          <Option key={request.id} value={request.id}>{request.number}</Option>
+        ))}
+        {dataIndex === 'basis' && finances.map((finance) => (
+          <Option key={finance.number} value={finance.number}>{finance.number}</Option>
+        ))}
+      </Select>
+      ) : 
+        dataIndex === 'payment_date' ? (
+          <input
+          type="date"
+          value={record[dataIndex] || ''}
+          onChange={handleDateChange}
+          style={{ width: '100%' }}
+        />
+    ) : (
+      dataIndex === 'amount' ? (
+        <InputNumber
+          value={record[dataIndex]}
+          onChange={(value) => {
+            record[dataIndex] = normalizeDecimalInput(value ? value.toString() : '');  // Применяем нормализацию
+          }}
+          decimalSeparator="." // Устанавливаем десятичный разделитель
+          formatter={(value) => value.replace(',', '.')} // Заменяем запятые на точки
+          parser={(value) => value.replace(',', '.')}
+        />
+      ) : (
+        <Input />
+      )
+    );
+  
+    return (
+      <td {...restProps}>
+        {editing ? (
+          <Form.Item
+            name={dataIndex}
+            style={{ margin: 0 }}
+            rules={
+              ['comment', 'shipment', 'request', 'basis'].includes(dataIndex)
+                ? [] // Эти поля необязательны
+                : [{ required: true, message: `Пожалуйста, введите ${title}!` }] // Остальные поля обязательны
+            }
+          >
+            {inputNode}
+          </Form.Item>
+        ) : (
+          children
+        )}
+      </td>
+    );
+  };
+
+  // Функция для сброса фильтров финансов
+  /*const resetFilters = () => {
+    form.resetFields(); // Сброс формы поиска
+    
+    // Сбрасываем фильтры, сортировку, текст поиска и выбранную колонку
+    setFilteredInfo({});
+    setSortedInfo({ columnKey: 'number', order: 'ascend' });  // Устанавливаем сортировку по умолчанию
+    setSearchText(''); // Сброс текста поиска
+    setSearchedColumn(''); // Сброс выбранной для поиска колонки
+    
+    // Обновляем данные для отображения всех записей
+    setFinances([]); // Временно очищаем данные, чтобы сброс сработал
+    setTimeout(() => {
+      setFinances([...finances]); // Возвращаем данные после очистки
+    }, 0);
+  };*/
+  const resetFilters = () => {
+    form.resetFields(); // Сброс полей формы
+
+    // Сбрасываем фильтры и сортировку к состоянию по умолчанию
+    setFinancesFilteredInfo({});
+    setFinancesSortedInfo({ columnKey: 'number', order: 'ascend' }); // Устанавливаем сортировку по умолчанию
+    setSearchText(''); // Очищаем текст поиска
+    setSearchedColumn(''); // Сбрасываем колонку поиска
+
+    // Возвращаем исходные данные в таблицу
+    setFinances(finances);
+};
+
+  const financeTable = (
+    <div>
+      {/* Заголовок таблицы */}
+      <h3>Счета и оплаты</h3>
+  
+      {/* Контейнер для кнопок */}
+      <div className="finance-actions">
+
+      <div className="finance-buttons-left">
+      {/* Кнопка для открытия формы создания новой записи */}
+      <Button type="default" onClick={createNewFinanceRow}>
+        Создать счёт или оплату
+      </Button>
+
+      {/* Кнопка для сброса фильтров */}
+      <Button type="default" onClick={resetFilters} icon={<CloseOutlined />}>Сбросить фильтры</Button>
+      </div>
+
+      {/* Кнопка для экспорта в Excel */}
+      <div className="finance-button-right">
+      <ExportButtonFinance
+        data={finances}
+        columns={mergedColumnsFinance}
+        fileName="Счета_и_оплаты"
+        shipments={shipments}
+        requests={requests}
+      />
+      </div>
+      </div>
+  
+      {/* Таблица для отображения и редактирования записей */}
+      <Form form={form} component={false}>
+      <Table
+        components={{
+          body: {
+            cell: EditableFinanceCell,
+          },
+        }}
+        dataSource={finances}
+        //columns={mergedColumnsFinance}
+        /*columns={mergedColumnsFinance.map(col => ({
+          ...col,
+          filteredValue: filteredInfo[col.dataIndex] || null,
+          sortOrder: sortedInfo.columnKey === col.dataIndex ? sortedInfo.order : null,
+          // Сбросить фильтр поиска для колонки при очистке
+          onFilterDropdownOpenChange: () => setSearchText('')
+        }))}*/
+          columns={mergedColumnsFinance.map((col) => ({
+            ...col,
+            filteredValue: financesFilteredInfo[col.dataIndex] || null,
+            sortOrder: financesSortedInfo.columnKey === col.dataIndex ? financesSortedInfo.order : null,
+          }))}
+        rowKey="number"
+        rowClassName="editable-row"
+        pagination={{ pageSize: 30, onChange: cancelFinance }}
+        /*onChange={(pagination, filters, sorter) => {
+          setFilteredInfo(filters);  // Устанавливаем фильтры
+          setSortedInfo(sorter);     // Устанавливаем сортировку
+        }}*/
+          onChange={(pagination, filters, sorter) => {
+            setFinancesFilteredInfo(filters); // Сохраняем фильтры для финансов
+            setFinancesSortedInfo(sorter); // Сохраняем сортировку для финансов
+          }}
+      />
+    </Form>
+    </div>
+  );
+  
+  
+  //Редактирование счёта и оплаты
+  const isEditingFinance = (record) => record.number === editingFinanceKey;
+
+  const editFinance = (record) => {
+    form.setFieldsValue({ ...record });
+    setEditingFinanceKey(record.number);
+  };
+  
+  //Сохранение счёта и оплаты
+  const saveFinance = async (number) => {
+    try {
+      const row = await form.validateFields();
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Token ${token}` };
+  
+      // Логика для редактирования существующей записи
+      const newData = [...finances];
+      const index = newData.findIndex((item) => item.number === number);
+  
+      if (index > -1) {
+        const item = newData[index];
+        const updatedFinance = { ...item, ...row };
+  
+        // Обновляем запись на сервере
+        const response = await axios.put(`${API_BASE_URL}/logistic/api/finance/${item.number}/`, updatedFinance, { headers });
+        
+        // Используем данные из ответа сервера для обновления состояния
+        newData.splice(index, 1, response.data);
+        setFinances(newData);  // Обновляем состояние с актуальными данными
+  
+        message.success('Запись успешно обновлена');
+      }
+  
+      // Сбрасываем ключ редактирования
+      setEditingFinanceKey('');
+    } catch (error) {
+      console.error('Ошибка при сохранении данных:', error);
+      message.error('Ошибка при сохранении данных');
+    }
+  };
+
+
+  //Удаление счёта и оплаты
+  const deleteFinance = (number) => {
+    const token = localStorage.getItem('token');
+    axios.delete(`${API_BASE_URL}/logistic/api/finance/${number}/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setFinances(finances.filter((finance) => finance.number !== number));
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+  
+  
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/logistic/api/finance/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setFinances(response.data);
+        setFinancesSortedInfo({ columnKey: 'number', order: 'ascend' });  // Устанавливаем начальную сортировку
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  }, []);
+  
+
+  //Работа с статьями расходов и доходов
+  const articleForm = (
+    <div>
+      <h3>Статьи расходов и доходов</h3>
+      <Button type="default" onClick={() => setIsArticleFormVisible(true)}>Создать статью</Button>
+      {isArticleFormVisible && (
+        <Form>
+          <Form.Item label="Наименование статьи">
+            <Input value={article.name} onChange={(e) => setArticle({ ...article, name: e.target.value })} className="article-form-input"/>
+          </Form.Item>
+          <Form.Item>
+            {article.id ? (
+              <Button type="primary" onClick={() => updateArticle()} className="article-form-button">Сохранить</Button>
+            ) : (
+              <Button type="primary" onClick={() => createNewArticle()} className="article-form-button">Создать</Button>
+            )}
+            <Button type="default" onClick={() => setIsArticleFormVisible(false)}>Отмена</Button>
+          </Form.Item>
+        </Form>
+      )}
+      <Table
+      columns={[
+        {
+          title: 'Наименование статьи',
+          dataIndex: 'name',
+          key: 'name',
+        },
+        {
+          title: 'Действия',
+          key: 'actions',
+          render: (record) => (
+            <Space size="middle">
+              <Button type="default" icon={<EditOutlined />} onClick={() => editArticle(record)}>Редактировать</Button>
+              <Popconfirm
+                title="Вы уверены, что хотите удалить статью?"
+                onConfirm={() => deleteArticle(record.id)}
+                okText="Да"
+                cancelText="Нет"
+              >
+                <Button type="default" icon={<DeleteOutlined />}>Удалить</Button>
+              </Popconfirm>
+            </Space>
+          ),
+        },
+      ]}
+      dataSource={articles}
+      rowKey="id"
+      className="table"
+    />
+    </div>
+  );
+
+  const editArticle = (record) => {
+    setIsArticleFormVisible(true);
+    setArticle(record);
+  };
+  
+  const deleteArticle = (id) => {
+    const token = localStorage.getItem('token');
+    axios.delete(`${API_BASE_URL}/logistic/api/articles/${id}/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setArticles(articles.filter((article) => article.id !== id));
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+  
+  
+  useEffect(() => {
+    if (isViewing === 'article') {
+    const token = localStorage.getItem('token');
+    axios.get(`${API_BASE_URL}/logistic/api/articles/`, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setArticles(response.data);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+    }
+  }, [isViewing]);
+  
+  
+  const createNewArticle = () => {
+    const token = localStorage.getItem('token');
+    axios.post(`${API_BASE_URL}/logistic/api/articles/`, article, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setArticles([...articles, response.data]);
+        setIsArticleFormVisible(false);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+
+  const updateArticle = () => {
+    const token = localStorage.getItem('token');
+    axios.put(`${API_BASE_URL}/logistic/api/articles/${article.id}/`, article, {
+      headers: {
+        Authorization: `Token ${token}`,
+      },
+    })
+      .then((response) => {
+        setArticles(articles.map((a) => a.id === article.id ? response.data : a));
+        setIsArticleFormVisible(false);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
+  };
+
+
+
+  //переход в отфильтрованные заявки из отправлений
+  const handleViewRequestsForShipment = (shipmentNumber) => {
+    setShipmentFilter(shipmentNumber); // Устанавливаем номер отправления для фильтра
+    setIsShipmentFilterActive(true); // Активируем фильтр
+    setIsViewing('requests'); // Переход на отображение заявок
+    
+    // Устанавливаем значение поиска в колонке 'Отправление'
+    setSearchText(shipmentNumber);
+    setSearchedColumn('shipment');
+  
+    // Триггерим поиск в таблице
+    if (searchInput.current) {
+      searchInput.current.input.value = shipmentNumber; // Проставляем значение в инпут
+    }
+  };
+  
+  
+  // Обновление useEffect для сброса фильтра
+  useEffect(() => {
+  
+    if (isViewing === 'requests' && shipmentFilter) {
+      const filtered = requests.filter((request) => {
+        const shipment = shipments.find((s) => s.id === request.shipment);
+        const match = shipment ? shipment.number.includes(shipmentFilter) : false;
+        return match;
+      });
+  
+      setFilteredRequests(filtered);
+    } else {
+      setFilteredRequests(requests);  // Возвращаем все заявки, если фильтр неактивен
+    }
+  }, [isViewing, shipmentFilter, requests, shipments]);
+
+
+  // Функция отправки писем
+  const handleSendEmails = async (shipment) => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Token ${token}` };
+  
+      // Получаем все заявки, связанные с отправлением
+      const response = await axios.get(`${API_BASE_URL}/logistic/api/requests/`, { headers });
+      const relatedRequests = response.data.filter(request => request.shipment === shipment.id);
+  
+      // Извлекаем уникальные id клиентов
+      const clientIds = [...new Set(relatedRequests.map(request => request.client))];
+
+      // Находим читаемую метку статуса
+      const readableStatus = statusOptions.find((option) => option.value === shipment.status)?.label || shipment.status;
+  
+      // Подготовка писем для отправки
+      const emailPromises = clientIds.map(clientId =>
+        axios.post(`${API_BASE_URL}/logistic/api/send-email/`, {
+          client_id: clientId,  // Отправляем client_id, а не email
+          subject: `Отправление №${shipment.number}`,
+          message: `Статус отправления: ${readableStatus}\nКомментарий: ${shipment.comment}`,
+        }, { headers })
+      );
+  
+      // Отправляем письма
+      await Promise.all(emailPromises);
+      message.success('Письма отправлены всем клиентам');
+    } catch (error) {
+      console.error('Ошибка при отправке писем', error);
+      message.error('Ошибка при отправке писем');
+    }
+  };
+
 
   // Функция для экспорта данных в Excel
   const exportToExcel = (data, columns, fileName) => {
@@ -132,7 +1015,7 @@ function ManagerDashboard() {
         } else if (col.dataIndex !== 'files' && col.dataIndex !== 'actions') {
           // Добавляем все остальные колонки, исключая файлы и действия
           row[col.title] = item[col.dataIndex] || '';
-        }
+        } 
       });
   
       return row;
@@ -210,9 +1093,9 @@ function ManagerDashboard() {
     }
   };
 
-  //const showShipmentModal = () => {
-    //setIsShipmentModalVisible(true);
-  //};
+  const showShipmentModal = () => {
+    setIsShipmentModalVisible(true);
+  };
   
   // Подтверждение добавления отправления из модального окна
   const handleShipmentModalOk = () => {
@@ -238,7 +1121,7 @@ function ManagerDashboard() {
     setIsRequestModalVisible(false);
   };
 
-  {/*const shipmentModal = (
+  const shipmentModal = (
     <Modal
       title="Создать отправление"
       open={isShipmentModalVisible}  // Заменяем visible на open
@@ -282,7 +1165,7 @@ function ManagerDashboard() {
         </div>
       </form>
     </Modal>
-  );*/}
+  );
 
   // Для корректного отображения названия файла с кириллицей
   const decodeFileName = (fileUrl) => {
@@ -337,7 +1220,14 @@ function ManagerDashboard() {
 
 
   const requestModal = (
-    <Modal>
+    <Modal
+      title="Создать заявку"
+      open={isRequestModalVisible}  // Заменяем visible на open
+      onOk={handleRequestModalOk}
+      onCancel={handleRequestModalCancel}
+      okText="Создать"
+      cancelText="Отмена"
+    >
       <form>
       <div className="form-field">
         <label className="form-label">Номер:</label>
@@ -528,12 +1418,6 @@ function ManagerDashboard() {
     fetchData();
   }, []);
 
-  // Для корректного отображения названия файла с кириллицей
-  //const decodeFileName = (fileUrl) => {
-    //const fileName = decodeURIComponent(fileUrl.split('/').pop());  // Декодируем часть URL с именем файла
-    //return fileName;
-  //};
-
    // Загрузка файла на сервер
  const handleUpload = async (files, requestId) => {
   const token = localStorage.getItem('token');
@@ -700,6 +1584,51 @@ const fileModal = (
   </Modal>
 );
 
+// Открытие модального окна для работы с файлами отправления
+const openShipmentFileModal = (record) => {
+  setCurrentShipmentRecord(record);
+  fetchShipmentFiles(record.id); // Загружаем файлы и папки для отправления
+  setIsShipmentFileModalVisible(true);
+};
+
+// Закрытие модального окна для файлов
+const closeShipmentFileModal = () => {
+  setIsShipmentFileModalVisible(false);
+  setCurrentShipmentRecord(null); // Сбрасываем запись, чтобы избежать ошибки
+};
+
+// Функция для загрузки списка файлов и папок отправления
+const fetchShipmentFiles = async (shipmentId) => {
+  try {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
+    const response = await axios.get(`${API_BASE_URL}/logistic/api/shipments/${shipmentId}/files/`, { headers });
+
+    // Обновляем состояние для текущей записи отправления
+    setCurrentShipmentRecord((prevRecord) => ({
+      ...prevRecord,
+      files: response.data.files,
+      folders: response.data.folders
+    }));
+  } catch (error) {
+    console.error("Ошибка при загрузке файлов и папок", error);
+    message.error("Ошибка при загрузке файлов и папок");
+  }
+};
+
+
+// Модальное окно для управления файлами отправления с функциями для создания, удаления папок и работы с файлами
+const shipmentFileModal = (
+    <FileManagementModal
+      visible={isShipmentFileModalVisible}
+      onClose={closeShipmentFileModal}
+      shipmentId={currentShipmentRecord?.id}
+      fetchShipmentFiles={() => fetchShipmentFiles(currentShipmentRecord.id)}
+      currentShipmentRecord={currentShipmentRecord}
+    />
+  /*</Modal>*/
+);
+
   //Поиск в сортировке
   const [searchText, setSearchText] = useState('');
   const [searchedColumn, setSearchedColumn] = useState('');
@@ -710,10 +1639,54 @@ const fileModal = (
     setSearchedColumn(dataIndex);
   };
 
-  const handleReset = (clearFilters) => {
+
+  const handleReset = (clearFilters, dataIndex) => {
     clearFilters();
     setSearchText('');
+    setSearchedColumn('');
+  
+    if (dataIndex === 'shipment') {
+      setShipmentFilter(null);  // Сброс фильтра по отправлению
+      setIsShipmentFilterActive(false);  // Деактивация фильтра
+      fetchRequests();  // Загрузка всех заявок
+    }
   };
+
+  // Функция поиска по колонке "shipment"
+  const getColumnShipmentSearchProps = (dataIndex) => ({
+    filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
+      <div style={{ padding: 8 }}>
+        <Input
+          ref={searchInput}
+          placeholder={`Поиск по ${dataIndex}`}
+          value={selectedKeys[0]}
+          onChange={(e) => setSelectedKeys(e.target.value ? [e.target.value] : [])}
+          onPressEnter={() => handleSearch(selectedKeys, confirm, dataIndex)}
+          style={{ marginBottom: 8, display: 'block' }}
+        />
+        <Space>
+          <Button
+            type="primary"
+            onClick={() => handleSearch(selectedKeys, confirm, dataIndex)}
+            icon={<SearchOutlined />}
+            size="small"
+            style={{ width: 90 }}
+          >
+            Поиск
+          </Button>
+          <Button onClick={() => handleReset(clearFilters, dataIndex)} size="small" style={{ width: 90 }}>
+            Сброс
+          </Button>
+        </Space>
+      </div>
+    ),
+    filterIcon: (filtered) => <SearchOutlined style={{ color: filtered ? '#1890ff' : undefined }} />,
+    onFilter: (value, record) => {
+      const shipment = shipments.find((s) => s.id === record.shipment);
+      return shipment ? shipment.number.includes(value) : false;
+    },
+  });
+
 
   const getColumnSearchProps = (dataIndex) => ({
     filterDropdown: ({ setSelectedKeys, selectedKeys, confirm, clearFilters }) => (
@@ -919,60 +1892,8 @@ const fileModal = (
     }
   };
 
-  /*const EditableCell = ({
-    editing,
-    dataIndex,
-    title,
-    inputType,
-    record,
-    index,
-    children,
-    ...restProps
-  }) => {
-    // Выбираем, какой набор статусов использовать: для отправлений или для заявок
-    const statusOptionsToUse = dataIndex === 'status' && isViewing === 'shipments'
-      ? statusOptions
-      : statusOptionsRequests;
 
-    const inputNode = dataIndex === 'status' || dataIndex === 'client' || dataIndex === 'shipment' ? (
-      <Select
-      showSearch  // Добавляем поиск
-      optionFilterProp="children"  // Фильтрация происходит по содержимому option
-      filterOption={(input, option) =>
-        option.children.toLowerCase().includes(input.toLowerCase())
-      }  // Логика фильтрации
-    >
-        {dataIndex === 'status' &&
-          statusOptionsToUse.map((option) => <Option key={option.value} value={option.value}>{option.label}</Option>)}
-        {dataIndex === 'client' &&
-          clients.map((client) => <Option key={client.id} value={client.id}>{client.name}</Option>)}
-        {dataIndex === 'shipment' &&
-          shipments.map((shipment) => <Option key={shipment.id} value={shipment.id}>{shipment.number}</Option>)}
-      </Select>
-    ) : (
-      <Input />
-    );
-    return (
-      <td {...restProps}>
-        {editing ? (
-          <Form.Item
-            name={dataIndex}
-            style={{ margin: 0 }}
-            rules={
-              // Для определенных полей правила валидации убираем, делаем необязательными
-              ['comment', 'number', 'warehouse_number', 'declared_weight', 'warehouse', 'description', 'declared_volume', 'actual_weight', 'actual_volume', 'rate', 'shipment'].includes(dataIndex)
-                ? [] // Эти поля необязательные
-                : [{ required: true, message: `Пожалуйста, введите ${title}!` }] // Все остальные поля обязательны
-            }
-          >
-            {inputNode}
-          </Form.Item>
-        ) : (
-          children
-        )}
-      </td>
-    );
-  };*/
+
   const EditableCell = ({
     editing,
     dataIndex,
@@ -1038,6 +1959,7 @@ const fileModal = (
       </td>
     );
   };
+  
 
 
   const columnsShipments = [
@@ -1047,11 +1969,23 @@ const fileModal = (
       defaultSortOrder: 'ascend',  // По умолчанию сортируем по возрастанию (раньше - выше)
       ...getColumnDateFilterProps('created_at'),  // Добавляем фильтрацию по диапазону дат
     },
-    { title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
-      //sorter: (a, b) => a.number.localeCompare(b.number),//поиск
-      sorter: (a, b) => (a.number || 0) - (b.number || 0),
-      ...getColumnSearchProps('number'),
-     },
+     {
+      title: 'Номер',
+      dataIndex: 'number',
+      key: 'number',
+      editable: true,
+      sorter: (a, b) => a.number.localeCompare(b.number),
+      ...getColumnShipmentSearchProps('number'),
+      render: (text, record) => (
+        <Button
+          type="link"
+          onClick={() => handleViewRequestsForShipment(text)}
+          style={{ padding: 0 }}
+        >
+          {text}
+        </Button>
+      ),
+    },
     { title: 'Комментарий', dataIndex: 'comment', key: 'comment', editable: true },
     {
       title: 'Статус',
@@ -1065,6 +1999,16 @@ const fileModal = (
       onFilter: (value, record) => record.status.includes(value), // Логика фильтрации по статусу
       render: (status) => statusOptions.find((opt) => opt.value === status)?.label || 'Нет данных',
       sorter: (a, b) => a.status.localeCompare(b.status), // Сортировка по статусу
+    },
+    {
+      title: 'Файлы',
+      dataIndex: 'files',
+      key: 'files',
+      render: (text, record) => (
+        <Button icon={<UploadOutlined />} onClick={() => openShipmentFileModal(record)}>
+          Управление файлами
+        </Button>
+      ),
     },
     {
       title: 'Действия',
@@ -1108,6 +2052,12 @@ const fileModal = (
                   {/*Удалить*/}
                 </Button>
               </Popconfirm>
+                <Button
+                  icon={<MailOutlined />}
+                  onClick={() => handleSendEmails(record)}  // Вызов функции отправки писем
+                  className="custom-small-btn"
+                />
+                {/*отправить письмо*/}
               </div>
           </span>
         );
@@ -1123,16 +2073,16 @@ const fileModal = (
       //render: (text) => new Date(text).toLocaleDateString() 
       ...getColumnDateFilterProps('created_at'),  // Добавляем фильтрацию по диапазону дат
     },
-    { title: 'Номер', dataIndex: 'number', key: 'number', editable: false,
+    { title: 'Номер', dataIndex: 'number', key: 'number', editable: true,
       //sorter: (a, b) => a.number.localeCompare(b.number), //Сортировакка
       sorter: (a, b) => (a.number || 0) - (b.number || 0),
       ...getColumnSearchProps('number'), // Фильтрация и поиск по номеру
      },
-    { title: 'Складской №', dataIndex: 'warehouse_number', key: 'warehouse_number', editable: false,
-      sorter: (a, b) => a.warehouse_number.localeCompare(b.warehouse_number), //Сортировакка
+    { title: 'Складской №', dataIndex: 'warehouse_number', key: 'warehouse_number', editable: true,
+      //sorter: (a, b) => a.warehouse_number.localeCompare(b.warehouse_number), //Сортировакка
       ...getColumnSearchProps('warehouse_number'), // Фильтрация и поиск по номеру 
     },
-    { title: 'Описание', dataIndex: 'description', key: 'description', editable: false,
+    { title: 'Описание', dataIndex: 'description', key: 'description', editable: true,
       sorter: (a, b) => a.description.localeCompare(b.description), //Сортировакка
       ...getColumnSearchProps('description'), // Фильтрация и поиск по номеру 
     },
@@ -1140,22 +2090,22 @@ const fileModal = (
       title: 'Кол-во мест',
       dataIndex: 'col_mest',
       key: 'col_mest',
-      editable: false
+      editable: true
     },
-    { title: 'Вес (кг)', dataIndex: 'declared_weight', key: 'declared_weight', editable: false },
-    { title: 'Объем (м³)', dataIndex: 'declared_volume', key: 'declared_volume', editable: false },
+    { title: 'Вес (кг)', dataIndex: 'declared_weight', key: 'declared_weight', editable: true },
+    { title: 'Объем (м³)', dataIndex: 'declared_volume', key: 'declared_volume', editable: true },
     { title: 'Фактический вес (кг)', dataIndex: 'actual_weight', key: 'actual_weight', editable: true },
     { title: 'Фактический объем (м³)', dataIndex: 'actual_volume', key: 'actual_volume', editable: true },
     { title: 'Комментарий', dataIndex: 'comment', key: 'comment', editable: true,
       sorter: (a, b) => a.comment.localeCompare(b.comment), //Сортировакка
       ...getColumnSearchProps('comment'), // Фильтрация и поиск по номеру 
     },
-    { title: 'Ставка', dataIndex: 'rate', key: 'rate', editable: false },
+    { title: 'Ставка', dataIndex: 'rate', key: 'rate', editable: true },
     {
       title: 'Клиент',
       dataIndex: 'client',
       key: 'client',
-      editable: false,
+      editable: true,
       ...getColumnSearchProps('client'),
       sorter: (a, b) => {
         const clientA = clients.find((c) => c.id === a.client)?.name || '';
@@ -1183,8 +2133,9 @@ const fileModal = (
       title: 'Отправление',
       dataIndex: 'shipment',
       key: 'shipment',
-      editable: false,
-      ...getColumnSearchProps('shipment'), // Добавляем поиск по отправлению
+      editable: true,
+      //...getColumnSearchProps('shipment'), // Добавляем поиск по отправлению
+      ...getColumnShipmentSearchProps('shipment'), // Добавляем поиск по отправлению
       sorter: (a, b) => {
         const shipmentA = shipments.find((s) => s.id === a.shipment)?.number || '';
         const shipmentB = shipments.find((s) => s.id === b.shipment)?.number || '';
@@ -1196,7 +2147,10 @@ const fileModal = (
       },
       onFilter: (value, record) => {
         const shipment = shipments.find((s) => s.id === record.shipment);
-        return shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        const match = shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        //return shipment ? shipment.number.toLowerCase().includes(value.toLowerCase()) : false;
+        console.log(`Применение фильтра в колонке 'Отправление': значение - ${value}, номер - ${shipment?.number || 'Нет данных'}, результат - ${match}`);
+        return match;
       },
     },
     {
@@ -1238,6 +2192,7 @@ const fileModal = (
           {/*Управление файлами*/}
         </Button>
       ),
+    
     },
     {
       title: 'Действия',
@@ -1272,6 +2227,15 @@ const fileModal = (
               >
                 {/*Редактировать*/}
               </Button>
+              <Popconfirm title="Удалить заявку?" onConfirm={() => deleteRequest(record.id)}>
+                <Button
+                  danger
+                  icon={<DeleteOutlined/>} // Иконка корзины для удаления
+                  className="custom-small-btn"  // Добавляем свой класс
+                >
+                  {/*Удалить*/}
+                </Button>
+              </Popconfirm>
               </div>
           </span>
         );
@@ -1315,16 +2279,56 @@ const fileModal = (
 
   return (
     <div className="container">
-      <h2>Склад</h2>
+      <h2>Менеджер</h2>
       <div className="tab-buttons">
+        <Button type="default" onClick={() => setIsViewing('shipments')}>Отправления</Button>
         <Button type="default" onClick={() => setIsViewing('requests')}>Заявки</Button>
+        <Button type="default" onClick={() => setIsViewing('finance')}>Финансы</Button>
+        {children}
       </div>
+
+      {isViewing === 'shipments' && (
+        <>
+          <h3>Отправления</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+          <Button type="primary" onClick={showShipmentModal}>Создать отправление</Button>
+          <ExportButton data={filteredShipments} columns={columnsShipments} fileName="Отправления" />
+          </div>
+          {shipmentModal}
+          <Form form={form} component={false}>
+          <Table
+            components={{
+              body: {
+                cell: EditableCell,
+              },
+            }}
+            bordered
+            dataSource={shipments}
+            //columns={mergedColumnsShipments}
+            columns={mergedColumnsShipments.map((col) => ({
+              ...col,
+              filteredValue: shipmentsFilteredInfo[col.dataIndex] || null,
+              sortOrder: shipmentsSortedInfo.columnKey === col.dataIndex ? shipmentsSortedInfo.order : null,
+            }))}
+            rowClassName="editable-row"
+            pagination={{ pageSize: 30, onChange: cancel }}
+            //onChange={handleTableChange}  // Добавляем обработчик для отслеживания изменений фильтров и сортировки
+            onChange={(pagination, filters, sorter) => {
+              setShipmentsFilteredInfo(filters); // Сохраняем фильтры для отправлений
+              setShipmentsSortedInfo(sorter); // Сохраняем сортировку для отправлений
+            }}
+          />
+          </Form>
+        </>
+      )}
+      {shipmentFileModal}
 
       {isViewing === 'requests' && (
         <>
           <h3>Заявки</h3>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-          <div>
+          <Button type="primary" onClick={showRequestModal}>Создать заявку</Button>
+            <div>
               <Button
                 type="default"
                 onClick={resetFiltersRequests} // Привязываем функцию сброса
@@ -1345,13 +2349,14 @@ const fileModal = (
               },
             }}
             bordered
-            dataSource={requests}
+            dataSource={isShipmentFilterActive ? filteredRequests : requests} // Используем filteredRequests при активном фильтре
             //columns={mergedColumnsRequests}
             columns={mergedColumnsRequests.map((col) => ({
               ...col,
               filteredValue: requestsFilteredInfo[col.dataIndex] || null,
               sortOrder: requestsSortedInfo.columnKey === col.dataIndex ? requestsSortedInfo.order : null,
             }))}
+              
             rowClassName="editable-row"
             pagination={{ pageSize: 30, onChange: cancel }}
             //onChange={handleTableChange}  // Добавляем обработчик для отслеживания изменений фильтров и сортировки
@@ -1364,8 +2369,39 @@ const fileModal = (
         </>
       )}
       {fileModal} {/* Добавляем модальное окно для управления файлами */}
+
+      {isViewing === 'finance' && (
+        <>
+          <h3>Финансы</h3>
+          <div className="finance-menu">
+            <Button type="default" onClick={() => setIsViewing('article')}>Статьи расходов и доходов</Button>
+            <Button type="default" onClick={() => setIsViewing('financeTable')}>Счета и оплаты</Button>
+            <Button type="default" onClick={() => setIsViewing('calculation')}>Калькуляция отправления</Button>
+            {isViewing === 'article' && articleForm}
+            {isViewing === 'financeTable' && financeTable}
+            {children}
+            {isViewing === 'calculation' && <ShipmentCalculation />}
+          </div>
+        </>
+      )}
+      {isViewing === 'article' && (
+        <div>
+          {articleForm}
+        </div>
+      )}
+      {isViewing === 'financeTable' && (
+        <div>
+          {financeTable}
+        </div>
+      )}
+      {isViewing === 'calculation' && (
+        <div>
+          <ShipmentCalculation />
+        </div>
+      )}
+      
     </div>
   );
 }
 
-export default ManagerDashboard;
+export default BossDashboard;
