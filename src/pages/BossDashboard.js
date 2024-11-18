@@ -13,6 +13,7 @@ import FileManagementModal from './FileManagementModal';
 import { InputNumber } from 'antd';
 import moment from 'moment';  // Убедитесь, что moment импортирован
 import ShipmentCalculation from './ShipmentCalculation'; // Импортируем компонент ShipmentCalculation
+import { Checkbox } from 'antd';
 
 
 
@@ -69,6 +70,10 @@ function BossDashboard({ children }) {
     columnKey: 'number',
     order: 'ascend',
   });
+  const [selectedCurrency, setSelectedCurrency] = useState(null);
+  const [balance, setBalance] = useState(null);
+  const [paymentForecastData, setPaymentForecastData] = useState([]);
+  const [paymentForecast, setPaymentForecast] = useState(null);
 
   
 
@@ -92,22 +97,207 @@ function BossDashboard({ children }) {
     { value: 'delivered', label: 'Выдано' }
   ];
 
-  // Функция сброса фильтров в таблице заявок
-  /*const resetFiltersRequests = () => {
-    form.resetFields(); // Сброс полей формы редактирования
-    setFilteredInfo({}); // Сбрасываем активные фильтры
-    setSortedInfo({ columnKey: 'created_at', order: 'ascend' }); // Сбрасываем сортировку, устанавливаем по умолчанию (по дате создания)
-    setSearchText(''); // Сбрасываем текст поиска
-    setSearchedColumn(''); // Сбрасываем колонку поиска
-    setShipmentFilter(null); // Убираем фильтр по отправлению, если он есть
-    setIsShipmentFilterActive(false); // Деактивируем фильтр отправления
-    
-    // Сбрасываем отображение данных таблицы
-    setFilteredRequests([]); // Временно очищаем
-    setTimeout(() => {
-      setFilteredRequests([...requests]); // Возвращаем исходные данные
-    }, 0);
+  const currencyMapping = {
+    'rub': 'Рубль',
+    'rubbn': 'Безнал',
+    'rubnds': 'НДС',
+    'eur': 'Евро',
+    'usd': 'Доллар'
+  };
+
+  // Функция для обновления таблицы Прогноз оплат
+const updatePaymentForecast = async (currency) => {
+  const token = localStorage.getItem('token');
+  const headers = { Authorization: `Token ${token}` };
+
+  try {
+    // Запрос на получение данных Finance
+    const response = await axios.get(`${API_BASE_URL}/logistic/api/finance/`, { headers });
+    const finances = response.data.filter(
+      (item) => item.document_type === 'bill' && !item.is_paid && item.currency === currency
+    );
+
+    // Расчёт данных для таблицы
+    const forecastData = finances.map((item) => ({
+      key: item.id, // Уникальный ключ
+      id: item.id,
+      payment_date: item.payment_date,
+      incoming: item.operation_type === 'in' ? item.amount : 0,
+      outgoing: item.operation_type === 'out' ? item.amount : 0,
+      number: item.number,
+      counterparty: item.counterparty,
+      article: item.article,
+      comment: item.comment,
+    }));
+
+    // Обновляем таблицу
+    setPaymentForecastData(forecastData);
+
+    // Расчёт прогноза оплат
+    const totalIncoming = forecastData.reduce(
+      (sum, item) => sum + parseFloat(item.incoming || 0), 
+      0
+    );
+    const totalOutgoing = forecastData.reduce(
+      (sum, item) => sum + parseFloat(item.outgoing || 0), 
+      0
+    ); 
+    // Устанавливаем прогноз, даже если totalOutgoing отсутствует
+    const paymentForecast = (totalOutgoing || 0) - (totalIncoming || 0);
+    setPaymentForecast(paymentForecast);
+  } catch (error) {
+    console.error('Ошибка при загрузке данных для прогноза оплат:', error);
+    message.error('Ошибка при загрузке данных для прогноза оплат.');
+  }
+};
+
+  // Функция для получения баланса с бэкенда
+  const fetchBalance = async (currency) => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
+  
+    try {
+      const response = await axios.get(`${API_BASE_URL}/logistic/api/finance/balance/`, {
+        headers,
+        params: { currency }, // Передаём выбранную валюту как параметр
+      });
+      setBalance(response.data.balance); // Предполагаем, что сервер возвращает { balance: значение }
+    } catch (error) {
+      console.error('Ошибка при получении баланса:', error);
+      message.error('Ошибка при получении баланса');
+    }
+  };
+
+  //обработчик изменения валюты
+  /*const handleCurrencyChange = (value) => {
+    setSelectedCurrency(value);
+    if (value) {
+      fetchBalance(value); // Запрашиваем баланс при выборе валюты
+    } else {
+      setBalance(null); // Сбрасываем баланс, если валюта не выбрана
+    }
   };*/
+  const handleCurrencyChange = (value) => {
+    setSelectedCurrency(value); // Устанавливаем выбранную валюту
+    if (value) {
+      fetchBalance(value); // Запрашиваем баланс для выбранной валюты
+      updatePaymentForecast(value); // Обновляем прогноз оплат
+    } else {
+      setBalance(null); // Сбрасываем баланс, если валюта не выбрана
+      setPaymentForecast(null); // Сбрасываем прогноз оплат
+      setPaymentForecastData([]); // Сбрасываем данные таблицы
+    }
+  };
+
+  // Инициализация данных
+  useEffect(() => {
+  if (selectedCurrency) {
+    updatePaymentForecast(selectedCurrency);
+  }
+}, [selectedCurrency]);
+
+  //Форма для отображения баланса
+  const balanceForm = (
+    <div>
+      <h3>Баланс</h3>
+      <Form layout="vertical">
+        <Form.Item label="Выберите валюту">
+          <Select
+            placeholder="Выберите валюту"
+            style={{ width: 200 }}
+            onChange={handleCurrencyChange}
+          >
+            {Object.entries(currencyMapping).map(([value, label]) => (
+              <Select.Option key={value} value={value}>
+                {label}
+              </Select.Option>
+            ))}
+          </Select>
+        </Form.Item>
+        {selectedCurrency && (
+          <Form.Item label={`Баланс (${currencyMapping[selectedCurrency]})`}>
+            <Input value={balance !== null ? balance : '—'} readOnly 
+            style={{
+              width: 'auto', // Автоматическая ширина
+              display: 'inline-block', // Обеспечиваем корректное сжатие
+              minWidth: '100px', // Минимальная ширина для удобства чтения
+            }}
+            />
+          </Form.Item>
+        )}
+      </Form>
+      {/* Таблица Прогноз оплат */}
+    <h3>Прогноз оплат</h3>
+    <Form layout="vertical" style={{ marginTop: '20px' }}>
+      <Form.Item>
+        <Input
+          value={paymentForecast !== null ? paymentForecast : '—'}
+          readOnly
+          style={{
+            width: 'auto',
+            display: 'inline-block',
+            minWidth: '100px',
+          }}
+        />
+      </Form.Item>
+    </Form>
+    <Table
+      dataSource={paymentForecastData}
+      columns={[
+        {
+          title: 'Дата оплаты',
+          dataIndex: 'payment_date',
+          key: 'payment_date',
+          render: (date) => (date ? moment(date).format('YYYY-MM-DD') : 'Нет данных'),
+        },
+        {
+          title: 'Входящие счета',
+          dataIndex: 'incoming',
+          key: 'incoming',
+        },
+        {
+          title: 'Исходящие счета',
+          dataIndex: 'outgoing',
+          key: 'outgoing',
+        },
+        {
+          title: 'Номер',
+          dataIndex: 'number',
+          key: 'number',
+        },
+        {
+          title: 'Контрагент',
+          dataIndex: 'counterparty',
+          key: 'counterparty',
+          render: (counterpartyId) => {
+            const counterparty = clients.find((c) => c.id === counterpartyId);
+            return counterparty ? counterparty.name : 'Нет данных';
+          },
+        },
+        {
+          title: 'Статья',
+          dataIndex: 'article',
+          key: 'article',
+          render: (articleId) => {
+            const article = articles.find((a) => a.id === articleId);
+            return article ? article.name : 'Нет данных';
+          },
+        },
+        {
+          title: 'Комментарий',
+          dataIndex: 'comment',
+          key: 'comment',
+        },
+      ]}
+      pagination={{ pageSize: 10 }}
+      //rowKey="id"
+      rowKey={(record) => record.id || `${record.number}-${record.payment_date}`} // Генерируем уникальный ключ
+    />
+    </div>
+  );
+
+
+  // Функция сброса фильтров в таблице заявок
   const resetFiltersRequests = () => {
     form.resetFields(); // Сброс полей формы редактирования
     setRequestsFilteredInfo({}); // Сбрасываем фильтры
@@ -207,13 +397,13 @@ function BossDashboard({ children }) {
     'payment': 'Оплата'
   };
   
-  const currencyMapping = {
+  /*const currencyMapping = {
     'rub': 'Рубль',
     'rubbn': 'Безнал',
     'rubnds': 'НДС',
     'eur': 'Евро',
     'usd': 'Доллар'
-  };
+  };*/
   
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -245,7 +435,8 @@ const createNewFinanceRow = async () => {
     payment_date: moment().format('YYYY-MM-DD'),
     document_type: 'bill', // или другой начальный тип документа
     currency: 'rub', // или другая валюта по умолчанию
-    amount: 0.0 // начальная сумма
+    amount: 0.0, // начальная сумма
+    is_paid: false, // Новое поле
   };
 
   try {
@@ -468,6 +659,28 @@ const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
       ...getColumnSelectSearchProps1('basis', finances, 'number'),  // добавляем поиск по основаниям
     },
     {
+      title: 'Оплата',
+      dataIndex: 'is_paid',
+      key: 'is_paid',
+      editable: true, // Позволяем редактирование
+      render: (_, record) => {
+        const editable = isEditingFinance(record); // Проверяем, редактируется ли строка
+        return editable ? (
+          <Checkbox
+            checked={record.is_paid}
+            onChange={(e) => form.setFieldsValue({ is_paid: e.target.checked })}
+          />
+        ) : (
+          <Checkbox checked={record.is_paid} disabled /> // Неактивный чекбокс вне режима редактирования
+        );
+      },
+      filters: [
+        { text: 'Оплачено', value: true },
+        { text: 'Не оплачено', value: false },
+      ],
+      onFilter: (value, record) => record.is_paid === value, // Логика фильтрации
+    },
+    {
       title: 'Действия',
       dataIndex: 'actions',
       key: 'actions',
@@ -585,8 +798,12 @@ const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
           parser={(value) => value.replace(',', '.')}
         />
       ) : (
+        dataIndex === 'is_paid' ? (
+          <Checkbox />
+        ) : (
         <Input />
       )
+    )
     );
   
     return (
@@ -594,9 +811,10 @@ const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
         {editing ? (
           <Form.Item
             name={dataIndex}
+            valuePropName={dataIndex === 'is_paid' ? 'checked' : 'value'} // Указываем привязку значения
             style={{ margin: 0 }}
             rules={
-              ['comment', 'shipment', 'request', 'basis'].includes(dataIndex)
+              ['comment', 'shipment', 'request', 'basis', 'is_paid'].includes(dataIndex)
                 ? [] // Эти поля необязательны
                 : [{ required: true, message: `Пожалуйста, введите ${title}!` }] // Остальные поля обязательны
             }
@@ -2377,10 +2595,12 @@ const shipmentFileModal = (
             <Button type="default" onClick={() => setIsViewing('article')}>Статьи расходов и доходов</Button>
             <Button type="default" onClick={() => setIsViewing('financeTable')}>Счета и оплаты</Button>
             <Button type="default" onClick={() => setIsViewing('calculation')}>Калькуляция отправления</Button>
+            <Button type="default" onClick={() => setIsViewing('balance')}>Баланс</Button>
             {isViewing === 'article' && articleForm}
             {isViewing === 'financeTable' && financeTable}
             {children}
             {isViewing === 'calculation' && <ShipmentCalculation />}
+            {isViewing === 'balance' && balanceForm}
           </div>
         </>
       )}
@@ -2397,6 +2617,11 @@ const shipmentFileModal = (
       {isViewing === 'calculation' && (
         <div>
           <ShipmentCalculation />
+        </div>
+      )}
+      {isViewing === 'balance' && (
+        <div>
+          {balanceForm}
         </div>
       )}
       
