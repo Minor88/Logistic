@@ -74,6 +74,10 @@ function BossDashboard({ children }) {
   const [balance, setBalance] = useState(null);
   const [paymentForecastData, setPaymentForecastData] = useState([]);
   const [paymentForecast, setPaymentForecast] = useState(null);
+  const [counterpartyBalances, setCounterpartyBalances] = useState(null);
+  const [selectedCounterparty, setSelectedCounterparty] = useState(null);
+  const [financeRecords, setFinanceRecords] = useState([]);
+  const [counterparties, setCounterparties] = useState([]);
 
   
 
@@ -104,6 +108,154 @@ function BossDashboard({ children }) {
     'eur': 'Евро',
     'usd': 'Доллар'
   };
+
+  //Балансы контрагентов
+  useEffect(() => {
+    const fetchCounterparties = async () => {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Token ${token}` };
+
+      try {
+        const response = await axios.get(`${API_BASE_URL}/logistic/api/clients/`, { headers });
+        setCounterparties(response.data);
+      } catch (error) {
+        console.error('Ошибка при загрузке контрагентов:', error);
+        message.error('Не удалось загрузить контрагентов.');
+      }
+    };
+
+    fetchCounterparties();
+  }, []);
+
+  const handleCounterpartyChange = async (value) => {
+    setSelectedCounterparty(value);
+
+    if (!value) {
+      setCounterpartyBalances(null);
+      setFinanceRecords([]);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Token ${token}` };
+
+    try {
+      const response = await axios.get(
+        `${API_BASE_URL}/logistic/api/finance/counterparty-balance/`,
+        {
+          headers,
+          params: { counterparty_id: value },
+        }
+      );
+
+      setCounterpartyBalances(response.data.balances);
+      setFinanceRecords(response.data.finances);
+    } catch (error) {
+      console.error('Ошибка при загрузке баланса контрагента:', error);
+      message.error('Не удалось загрузить баланс контрагента.');
+    }
+  };
+
+  const balanceColumns = [
+    {
+      title: 'Валюта',
+      dataIndex: 'currency',
+      key: 'currency',
+    },
+    {
+      title: 'Баланс',
+      dataIndex: 'balance',
+      key: 'balance',
+    },
+  ];
+
+  const financeColumns = [
+    {
+      title: 'Дата создания',
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (date) => date ? moment(date).format('YYYY-MM-DD') : 'Нет данных',
+      sorter: (a, b) => new Date(b.created_at) - new Date(a.created_at), // Сортировка по дате от позднего к раннему
+      defaultSortOrder: 'ascend',  // По умолчанию сортируем по возрастанию (раньше - выше)
+    },
+    {
+      title: 'Номер',
+      dataIndex: 'number',
+      key: 'number',
+      sorter: (a, b) => b.number - a.number,
+    },
+    {
+      title: 'Тип операции',
+      dataIndex: 'operation_type',
+      key: 'operation_type',
+      render: (text) => operationTypeMapping[text] || text,
+    },
+    {
+      title: 'Дата оплаты',
+      dataIndex: 'payment_date',
+      key: 'payment_date',
+    },
+    {
+      title: 'Тип документа',
+      dataIndex: 'document_type',
+      key: 'document_type',
+      render: (text) => documentTypeMapping[text] || text,
+    },
+    {
+      title: 'Валюта',
+      dataIndex: 'currency',
+      key: 'currency',
+      render: (text) => currencyMapping[text] || text,
+    },
+    {
+      title: 'Сумма',
+      dataIndex: 'amount',
+      key: 'amount',
+    },
+    {
+      title: 'Комментарий',
+      dataIndex: 'comment',
+      key: 'comment',
+    },
+    {
+      title: 'Статья',
+      dataIndex: 'article',
+      key: 'article',
+      render: (articleId) => {
+        const article = articles.find((a) => a.id === articleId);
+        return article ? article.name : 'Нет данных';
+      }
+    },
+    {
+      title: 'Отправление',
+      dataIndex: 'shipment',
+      key: 'shipment',
+      render: (shipmentId) => {
+        const shipment = shipments.find((s) => s.id === shipmentId);
+        return shipment ? shipment.number : 'Нет данных';
+      }
+    },
+    {
+      title: 'Заявка',
+      dataIndex: 'request',
+      key: 'request',
+      render: (requestId) => {
+        const request = requests.find((r) => r.id === requestId);
+        return request ? request.number : 'Нет данных';
+      }
+    },
+    {
+      title: 'Основание',
+      dataIndex: 'basis',
+      key: 'basis',
+      render: (basisId) => {
+        const basis = finances.find((f) => f.number === basisId);
+        return basis ? basis.number : 'Нет данных';
+      }
+    },
+  ];
+
+  
 
   // Функция для обновления таблицы Прогноз оплат
 const updatePaymentForecast = async (currency) => {
@@ -746,6 +898,8 @@ const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
         showSearch  // Включаем поиск
         optionFilterProp="children"  // Фильтрация по содержимому option
         allowClear  // Позволяет очищать выбор
+        popupMatchSelectWidth={false} // Новый способ отключения привязки ширины к полю
+        dropdownStyle={{ maxWidth: '500px' }} // Максимальная ширина выпадающего окна
         filterOption={(input, option) => {
           if (option.children) {
             return option.children.toString().toLowerCase().includes(input.toLowerCase());
@@ -867,7 +1021,7 @@ const getColumnSelectSearchProps1 = (dataIndex, data, nameProp) => ({
 
       <div className="finance-buttons-left">
       {/* Кнопка для открытия формы создания новой записи */}
-      <Button type="default" onClick={createNewFinanceRow}>
+      <Button type="default" className="finance-create-button" onClick={createNewFinanceRow} >
         Создать счёт или оплату
       </Button>
 
@@ -2596,6 +2750,7 @@ const shipmentFileModal = (
             <Button type="default" onClick={() => setIsViewing('financeTable')}>Счета и оплаты</Button>
             <Button type="default" onClick={() => setIsViewing('calculation')}>Калькуляция отправления</Button>
             <Button type="default" onClick={() => setIsViewing('balance')}>Баланс</Button>
+            <Button type="default" onClick={() => setIsViewing('balanceCounterparty')}>Баланс контрагентов</Button>
             {isViewing === 'article' && articleForm}
             {isViewing === 'financeTable' && financeTable}
             {children}
@@ -2622,6 +2777,57 @@ const shipmentFileModal = (
       {isViewing === 'balance' && (
         <div>
           {balanceForm}
+        </div>
+      )}
+      {isViewing === 'balanceCounterparty' && (
+        <div>
+          <h3>Баланс контрагентов</h3>
+          <Form layout="vertical">
+            <Form.Item label="Выберите контрагента">
+              <Select
+                showSearch
+                placeholder="Выберите контрагента"
+                optionFilterProp="children"
+                style={{ minWidth: '150px', maxWidth: '100%', width: 'auto' }} // Автоматическая ширина
+                onChange={handleCounterpartyChange}
+              >
+                {counterparties.map((counterparty) => (
+                  <Option key={counterparty.id} value={counterparty.id}>
+                    {counterparty.name}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+
+          {counterpartyBalances && (
+            <div>
+              <h4>Баланс по валютам</h4>
+              <Table
+                dataSource={Object.entries(counterpartyBalances).map(([currency, balance]) => ({
+                  key: currency,
+                  currency: currencyMapping[currency] || currency,
+                  balance,
+                }))}
+                columns={balanceColumns}
+                pagination={false}
+              />
+            </div>
+          )}
+
+          {financeRecords.length > 0 && (
+            <div>
+              <h4>Финансовые записи контрагента</h4>
+              <Table
+                dataSource={financeRecords.map((record) => ({
+                  ...record,
+                  key: record.number,
+                }))}
+                columns={financeColumns}
+                pagination={{ pageSize: 10 }}
+              />
+            </div>
+          )}
         </div>
       )}
       

@@ -214,3 +214,14 @@ button.custom-small-btn:last-child {
   display: flex;
   align-items: center;
 }
+
+.finance-create-button {
+  background-color: #4CAF50; /* Основной зелёный цвет */
+  color: #ffffff; /* Белый текст */
+  border-color: #4CAF50; /* Зелёная граница */
+}
+
+.finance-create-button:hover {
+  background-color: #45a049; /* Более тёмный зелёный при наведении */
+  border-color: #45a049; /* Соответствующая граница */
+}
